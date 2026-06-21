@@ -176,6 +176,7 @@ export async function createDepositPayment(
     org_id: params.orgId,
     lead_id: params.leadId,
     stripe_intent_id: stripeReferenceId,
+    checkout_session_id: session.id,
     amount_paid: org.deposit_amount_cents,
     status: "pending",
     checkout_url: session.url,

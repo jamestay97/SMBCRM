@@ -144,6 +144,7 @@ export type Payment = {
   org_id: string;
   lead_id: string;
   stripe_intent_id: string;
+  checkout_session_id: string | null;
   amount_paid: number;
   status: PaymentStatus;
   checkout_url: string | null;

@@ -27,39 +27,22 @@ type PaymentSucceededRow = {
   business_name: string;
 };
 
-async function ensurePaymentLinked(params: {
-  paymentIntentId: string;
-  checkoutSessionId?: string;
-  orgId?: string;
-  leadId?: string;
-}): Promise<void> {
-  await linkPendingPaymentToIntent(params);
-
+async function runHandlePaymentSucceeded(
+  stripeIntentId: string,
+  amountPaidCents: number
+): Promise<PaymentSucceededRow | null> {
   const admin = createAdminClient();
-  const { data: byIntent } = await admin
-    .from("payments")
-    .select("id")
-    .eq("stripe_intent_id", params.paymentIntentId)
-    .maybeSingle();
+  const { data, error } = await admin.rpc("handle_payment_succeeded", {
+    p_stripe_intent_id: stripeIntentId,
+    p_amount_paid: amountPaidCents,
+  });
 
-  if (byIntent) return;
-
-  if (params.checkoutSessionId) {
-    const { data: bySession } = await admin
-      .from("payments")
-      .select("id")
-      .eq("stripe_intent_id", params.checkoutSessionId)
-      .eq("status", "pending")
-      .maybeSingle();
-
-    if (bySession) {
-      await admin
-        .from("payments")
-        .update({ stripe_intent_id: params.paymentIntentId })
-        .eq("id", bySession.id)
-        .eq("status", "pending");
-    }
+  if (error) {
+    throw new Error(error.message);
   }
+
+  const rows = (data ?? []) as PaymentSucceededRow[];
+  return rows[0] ?? null;
 }
 
 export async function confirmPaymentSucceeded(params: {
@@ -69,7 +52,7 @@ export async function confirmPaymentSucceeded(params: {
   orgId?: string;
   leadId?: string;
 }): Promise<ConfirmPaymentResult | null> {
-  await ensurePaymentLinked({
+  await linkPendingPaymentToIntent({
     paymentIntentId: params.paymentIntentId,
     checkoutSessionId: params.checkoutSessionId,
     orgId: params.orgId,
@@ -78,26 +61,58 @@ export async function confirmPaymentSucceeded(params: {
 
   const admin = createAdminClient();
 
-  const { data: existingPayment } = await admin
-    .from("payments")
-    .select("status")
-    .eq("stripe_intent_id", params.paymentIntentId)
-    .maybeSingle();
+  const lookupIds = [
+    params.paymentIntentId,
+    ...(params.checkoutSessionId &&
+    params.checkoutSessionId !== params.paymentIntentId
+      ? [params.checkoutSessionId]
+      : []),
+  ];
 
-  const isFirstSuccess = existingPayment?.status !== "succeeded";
-
-  const { data, error } = await admin.rpc("handle_payment_succeeded", {
-    p_stripe_intent_id: params.paymentIntentId,
-    p_amount_paid: params.amountPaidCents,
-  });
-
-  if (error) {
-    console.error("[confirm-payment] handle_payment_succeeded failed", error);
-    throw new Error(error.message);
+  let existingStatus: string | null = null;
+  for (const id of lookupIds) {
+    const { data } = await admin
+      .from("payments")
+      .select("status")
+      .eq("stripe_intent_id", id)
+      .maybeSingle();
+    if (data?.status) {
+      existingStatus = data.status;
+      break;
+    }
   }
 
-  const rows = (data ?? []) as PaymentSucceededRow[];
-  const result = rows[0];
+  if (!existingStatus && params.checkoutSessionId) {
+    const { data } = await admin
+      .from("payments")
+      .select("status")
+      .eq("checkout_session_id", params.checkoutSessionId)
+      .maybeSingle();
+    existingStatus = data?.status ?? null;
+  }
+
+  const isFirstSuccess = existingStatus !== "succeeded";
+
+  let result: PaymentSucceededRow | null = null;
+  let lastError: Error | null = null;
+
+  for (const id of lookupIds) {
+    try {
+      result = await runHandlePaymentSucceeded(id, params.amountPaidCents);
+      if (result) break;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (!lastError.message.includes("not found")) {
+        throw lastError;
+      }
+    }
+  }
+
+  if (!result && lastError) {
+    console.error("[confirm-payment] handle_payment_succeeded failed", lastError);
+    throw lastError;
+  }
+
   if (!result) return null;
 
   if (isFirstSuccess) {
@@ -137,22 +152,35 @@ export async function confirmStripeCheckoutSession(
   sessionId: string
 ): Promise<ConfirmPaymentResult | null> {
   const stripe = getStripe();
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    expand: ["payment_intent"],
+  });
 
   if (session.payment_status !== "paid") {
     return null;
   }
 
   const paymentIntentId = getCheckoutPaymentIntentId(session);
+  const amountPaidCents =
+    session.amount_total ??
+    (typeof session.payment_intent === "object"
+      ? session.payment_intent?.amount_received
+      : null) ??
+    0;
+
   if (!paymentIntentId) {
-    return null;
+    return confirmPaymentSucceeded({
+      paymentIntentId: session.id,
+      amountPaidCents,
+      checkoutSessionId: session.id,
+      orgId: session.metadata?.org_id,
+      leadId: session.metadata?.lead_id,
+    });
   }
 
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
   return confirmPaymentSucceeded({
-    paymentIntentId: paymentIntent.id,
-    amountPaidCents: paymentIntent.amount_received,
+    paymentIntentId,
+    amountPaidCents,
     checkoutSessionId: session.id,
     orgId: session.metadata?.org_id,
     leadId: session.metadata?.lead_id,

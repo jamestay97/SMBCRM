@@ -10,6 +10,7 @@ const publicPathPrefixes = ["/b/"];
 const publicApiPrefixes = [
   "/api/auth/signup",
   "/api/stripe/webhook",
+  "/api/stripe/confirm-session",
   "/api/twilio/",
   "/api/vapi/",
   "/api/ai/tools/",
