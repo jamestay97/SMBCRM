@@ -70,7 +70,15 @@ curl -X POST http://localhost:3000/api/jobs/process \
   -d "{}"
 ```
 
-In production on Vercel, `vercel.json` runs this every 2 minutes via cron. Set `CRON_SECRET` (or use the same value as `INTERNAL_API_SECRET`).
+In production on Vercel **Pro**, you can add a cron in `vercel.json` (e.g. every 2 minutes). On the **Hobby (free) plan**, Vercel only allows one cron run per day — use a free external scheduler instead:
+
+```bash
+# Example: cron-job.org → GET every 5 minutes
+# URL: https://your-app.vercel.app/api/jobs/process
+# Header: Authorization: Bearer YOUR_CRON_SECRET
+```
+
+Set `CRON_SECRET` (or use the same value as `INTERNAL_API_SECRET`) in Vercel env vars.
 
 7. **Run locally**
 
