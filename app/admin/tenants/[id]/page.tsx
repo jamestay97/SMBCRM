@@ -255,7 +255,11 @@ export default function AdminTenantDetailPage({
             )}
           </p>
           <p>
-            <span className="text-muted-foreground">Voice (Vapi): </span>
+            <span className="text-muted-foreground">Voice (Vapi — by phone): </span>
+            POST {appOrigin}/api/vapi/webhook
+          </p>
+          <p>
+            <span className="text-muted-foreground">Voice (Vapi — legacy): </span>
             POST {appOrigin}/api/vapi/{tenant.id}/webhook
           </p>
           <p>

@@ -10,6 +10,20 @@ function normalizeOrigin(url: string): string {
   return `https://${trimmed}`;
 }
 
+/** Strip paths — NEXT_PUBLIC_APP_URL must be origin only (no /payment/success). */
+function appOriginOnly(url: string): string {
+  try {
+    const parsed = new URL(
+      url.startsWith("http://") || url.startsWith("https://")
+        ? url
+        : `https://${url}`
+    );
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return normalizeOrigin(url);
+  }
+}
+
 function isLocalhostUrl(url?: string | null): boolean {
   if (!url?.trim()) return true;
   try {
@@ -37,7 +51,7 @@ function getVercelAppUrl(): string | null {
 export function getAppUrl(): string {
   const explicit = process.env.APP_URL?.trim();
   if (explicit && !isLocalhostUrl(explicit)) {
-    return normalizeOrigin(explicit);
+    return appOriginOnly(explicit);
   }
 
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
@@ -47,12 +61,12 @@ export function getAppUrl(): string {
     if (!configured || configured.includes("ngrok")) {
       return "http://localhost:3000";
     }
-    return normalizeOrigin(configured);
+    return appOriginOnly(configured);
   }
 
   // Production: never send Stripe redirects to localhost.
   if (configured && !isLocalhostUrl(configured)) {
-    return normalizeOrigin(configured);
+    return appOriginOnly(configured);
   }
 
   const vercelUrl = getVercelAppUrl();
@@ -65,7 +79,7 @@ export function getAppUrl(): string {
 export function getWebhookBaseUrl(): string {
   const webhook = process.env.WEBHOOK_BASE_URL?.trim();
   if (webhook && !isLocalhostUrl(webhook)) {
-    return normalizeOrigin(webhook);
+    return appOriginOnly(webhook);
   }
 
   if (process.env.NODE_ENV !== "development") {

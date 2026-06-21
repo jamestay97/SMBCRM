@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { createClient } from "@/lib/supabase/server";
-import { isPlatformAdmin } from "@/lib/auth/platform";
+import {
+  isEmailAllowedBootstrap,
+  isPlatformAdmin,
+} from "@/lib/auth/platform";
 
 export default async function AdminLayout({
   children,
@@ -19,6 +22,9 @@ export default async function AdminLayout({
 
   const admin = await isPlatformAdmin(user.id);
   if (!admin) {
+    if (user.email && isEmailAllowedBootstrap(user.email)) {
+      redirect("/setup-admin");
+    }
     redirect("/dashboard");
   }
 

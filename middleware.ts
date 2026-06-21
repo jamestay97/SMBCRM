@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { isPlatformAdmin } from "@/lib/auth/platform";
+import {
+  isEmailAllowedBootstrap,
+  isPlatformAdmin,
+} from "@/lib/auth/platform";
 
 const publicPaths = ["/", "/login", "/signup", "/payment/success", "/payment/cancelled"];
 const publicPathPrefixes = ["/b/"];
@@ -62,6 +65,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (pathname === "/setup-admin") {
+    if (!user) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    return response;
+  }
+
   if (pathname.startsWith("/admin")) {
     if (!user) {
       const loginUrl = request.nextUrl.clone();
@@ -72,9 +85,13 @@ export async function middleware(request: NextRequest) {
 
     const admin = await isPlatformAdmin(user.id);
     if (!admin) {
-      const dashboardUrl = request.nextUrl.clone();
-      dashboardUrl.pathname = "/dashboard";
-      return NextResponse.redirect(dashboardUrl);
+      const redirectUrl = request.nextUrl.clone();
+      if (user.email && isEmailAllowedBootstrap(user.email)) {
+        redirectUrl.pathname = "/setup-admin";
+      } else {
+        redirectUrl.pathname = "/dashboard";
+      }
+      return NextResponse.redirect(redirectUrl);
     }
   }
 

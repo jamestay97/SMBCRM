@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import type { Organization, OrgMemberRole } from "@/types/database";
 import { BootstrapAdminCard } from "@/components/admin/bootstrap-admin-card";
+import { BusinessPhoneCard } from "@/components/settings/business-phone-card";
 import { CustomerContactLinkCard } from "@/components/settings/customer-contact-link-card";
 import { ServicesScopeTagsInput } from "@/components/settings/services-scope-tags-input";
 import {
@@ -106,6 +107,11 @@ export default function SettingsPage() {
     return <p className="text-muted-foreground">Organization not found.</p>;
   }
 
+  const appOrigin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL ?? "https://smbcrm.vercel.app";
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -121,9 +127,16 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <BusinessPhoneCard
+        canManage={canManage}
+        appOrigin={appOrigin}
+        onSaved={(phoneDisplay) => setPrimaryPhone(phoneDisplay)}
+      />
+
       <CustomerContactLinkCard
         publicSlug={org.public_slug}
         phoneDisplay={primaryPhone}
+        appOrigin={appOrigin}
       />
 
       <Card>

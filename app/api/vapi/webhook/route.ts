@@ -8,10 +8,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
+export async function POST(request: NextRequest) {
   if (!verifyVapiWebhook(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
@@ -23,10 +20,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const resolved = await resolveOrgIdForVapiWebhook({
-    orgIdFromPath: params.orgId,
-    body,
-  });
+  const resolved = await resolveOrgIdForVapiWebhook({ body });
   if ("error" in resolved) {
     return resolved.error;
   }

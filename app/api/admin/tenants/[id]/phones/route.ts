@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/platform";
-import { normalizeStoredPhoneNumber } from "@/lib/jobs/enqueue";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { assignTenantPrimaryPhone } from "@/lib/tenant/phones";
 
 const phoneSchema = z.object({
   phone_number: z.string().min(7).max(30),
@@ -44,30 +43,23 @@ export async function POST(
     );
   }
 
-  const admin = createAdminClient();
-
-  if (parsed.data.is_primary) {
-    await admin
-      .from("tenant_phone_numbers")
-      .update({ is_primary: false })
-      .eq("org_id", params.id);
-  }
-
-  const { data, error } = await admin
-    .from("tenant_phone_numbers")
-    .insert({
-      org_id: params.id,
-      phone_number: normalizeStoredPhoneNumber(parsed.data.phone_number),
-      twilio_sid: parsed.data.twilio_sid ?? null,
+  try {
+    const phone = await assignTenantPrimaryPhone({
+      orgId: params.id,
+      phoneNumber: parsed.data.phone_number,
       channel: parsed.data.channel,
-      is_primary: parsed.data.is_primary,
-    })
-    .select("*")
-    .single();
+      twilioSid: parsed.data.twilio_sid ?? null,
+    });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ phone }, { status: 201 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Save failed";
+    if (message === "PHONE_IN_USE") {
+      return NextResponse.json(
+        { error: "That phone number is already assigned to another business." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ phone: data }, { status: 201 });
 }

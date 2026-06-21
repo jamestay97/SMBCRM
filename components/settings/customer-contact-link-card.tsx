@@ -16,9 +16,11 @@ import { buildCustomerPagePath } from "@/lib/business/public-profile";
 export function CustomerContactLinkCard({
   publicSlug,
   phoneDisplay,
+  appOrigin,
 }: {
   publicSlug: string | null | undefined;
   phoneDisplay?: string | null;
+  appOrigin: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -37,11 +39,7 @@ export function CustomerContactLinkCard({
   }
 
   const path = buildCustomerPagePath(publicSlug);
-  const origin =
-    typeof window !== "undefined"
-      ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const fullUrl = `${origin}${path}`;
+  const fullUrl = `${appOrigin}${path}`;
 
   async function copyLink() {
     try {
@@ -80,10 +78,12 @@ export function CustomerContactLinkCard({
             </a>
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Twilio voice webhook: POST /api/twilio/voice · SMS webhook: POST
-          /api/twilio/inbound
-        </p>
+        {!phoneDisplay && (
+          <p className="text-xs text-amber-700">
+            Add your business phone above so the customer page shows Call and
+            Text buttons.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

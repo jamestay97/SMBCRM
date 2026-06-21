@@ -125,10 +125,34 @@ export function CustomerContactPage({
         </Card>
 
         {hasPhone && (
-          <p className="mt-8 text-center text-xs text-muted-foreground">
-            Prefer texting? Tap &quot;Text&quot; on mobile — you&apos;ll message
-            our AI directly at {business.phone_display}.
-          </p>
+          <>
+            <p className="mt-8 text-center text-xs text-muted-foreground">
+              Prefer texting? Tap &quot;Text&quot; on mobile — you&apos;ll message
+              our AI directly at {business.phone_display}.
+            </p>
+            <Card className="mt-6 border-slate-200 bg-slate-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Text message consent</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <p>
+                  By texting {business.phone_display}, you agree to receive
+                  automated and human-assisted SMS replies from{" "}
+                  {business.business_name} about your service request,
+                  appointment scheduling, and deposit links. Message frequency
+                  varies. Msg &amp; data rates may apply.
+                </p>
+                <p>
+                  You are not required to consent to receive texts as a condition
+                  of purchase. Reply <strong>STOP</strong> to opt out or{" "}
+                  <strong>HELP</strong> for help.
+                </p>
+                <p>
+                  You may also call {business.phone_display} instead of texting.
+                </p>
+              </CardContent>
+            </Card>
+          </>
         )}
       </section>
     </main>
