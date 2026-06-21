@@ -5,14 +5,26 @@ import {
   handleInboundMessage,
   ingestLead,
 } from "@/lib/leads/ingest";
+import { getTenantInboundAccess } from "@/lib/tenant/access";
 import { parseVapiWebhookPayload } from "@/lib/vapi/client";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
+
+function verifyVapiWebhook(request: NextRequest): boolean {
+  const secret = process.env.VAPI_WEBHOOK_SECRET?.trim();
+  if (!secret) return true;
+  return request.headers.get("x-vapi-secret") === secret;
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { orgId: string } }
 ) {
+  if (!verifyVapiWebhook(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   const orgId = params.orgId;
   const admin = createAdminClient();
 
@@ -24,6 +36,11 @@ export async function POST(
 
   if (orgError || !org) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+
+  const access = await getTenantInboundAccess(orgId);
+  if (!access.allowed) {
+    return NextResponse.json({ error: "Tenant unavailable" }, { status: 403 });
   }
 
   let body: unknown;
@@ -49,7 +66,7 @@ export async function POST(
   }
 
   try {
-    let lead = await findLeadByPhone(orgId, customerNumber);
+    const lead = await findLeadByPhone(orgId, customerNumber);
 
     if (!lead) {
       await ingestLead({

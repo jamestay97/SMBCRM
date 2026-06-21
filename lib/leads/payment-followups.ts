@@ -8,6 +8,7 @@ import { formatDepositAmount } from "@/lib/calendar/format-appointment";
 import { resolveOrgLlmConfig } from "@/lib/llm/org-config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSms } from "@/lib/twilio/client";
+import { twilioSmsConfigured } from "@/lib/twilio/phone";
 import type { PaymentFollowupStatus } from "@/types/database";
 
 export const PAYMENT_FOLLOWUP_DELAYS_MS = [
@@ -17,14 +18,6 @@ export const PAYMENT_FOLLOWUP_DELAYS_MS = [
 ] as const;
 
 const FOLLOWUP_LABELS = ["first", "second", "third"] as const;
-
-function twilioConfigured(): boolean {
-  return Boolean(
-    process.env.TWILIO_ACCOUNT_SID &&
-      process.env.TWILIO_AUTH_TOKEN &&
-      process.env.TWILIO_FROM_NUMBER
-  );
-}
 
 export async function schedulePaymentFollowups(params: {
   orgId: string;
@@ -218,9 +211,13 @@ async function sendFollowUp(params: {
     });
   }
 
-  if (lead.phone && twilioConfigured()) {
+  if (lead.phone && twilioSmsConfigured()) {
     try {
-      await sendSms({ to: lead.phone, body: message });
+      await sendSms({
+        to: lead.phone,
+        body: message,
+        orgId: params.orgId,
+      });
     } catch (err) {
       console.error("[payment-followups] SMS failed", err);
     }

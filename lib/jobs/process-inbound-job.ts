@@ -139,7 +139,11 @@ export async function processInboundJob(jobId: string): Promise<void> {
       const smsBody = paymentUrl
         ? `${reply}\n\nPay your deposit: ${paymentUrl}`
         : reply;
-      await sendSms({ to: payload.from, body: smsBody });
+      await sendSms({
+        to: payload.from,
+        body: smsBody,
+        orgId: typedJob.org_id,
+      });
     }
 
     const finalStatus = slaMet ? "completed" : "sla_breached";

@@ -106,6 +106,11 @@ export default function AdminTenantDetailPage({
     ? tenant.tenant_subscriptions[0]
     : tenant.tenant_subscriptions;
 
+  const appOrigin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL ?? "";
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
@@ -220,9 +225,32 @@ export default function AdminTenantDetailPage({
 
       <Card>
         <CardHeader>
+          <CardTitle>Webhooks</CardTitle>
+          <CardDescription>
+            Configure these in Twilio / Vapi after deploying to Vercel (not GitHub Pages).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 font-mono text-xs break-all">
+          <p>
+            <span className="text-muted-foreground">SMS (all tenants): </span>
+            POST {appOrigin}/api/twilio/inbound
+          </p>
+          <p>
+            <span className="text-muted-foreground">Voice (Vapi): </span>
+            POST {appOrigin}/api/vapi/{tenant.id}/webhook
+          </p>
+          <p>
+            <span className="text-muted-foreground">Stripe: </span>
+            POST {appOrigin}/api/stripe/webhook
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Twilio numbers</CardTitle>
           <CardDescription>
-            Webhook: POST /api/twilio/inbound — routes by the &quot;To&quot; number.
+            Assign the business Twilio number in E.164 (+1…). SMS replies go out from the primary number.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

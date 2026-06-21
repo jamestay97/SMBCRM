@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { getTenantOutboundNumber, twilioSmsConfigured } from "@/lib/twilio/phone";
 
 export function getTwilioClient() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -22,9 +23,23 @@ export function getTwilioFromNumber(): string {
 export async function sendSms(params: {
   to: string;
   body: string;
+  from?: string;
+  orgId?: string;
 }): Promise<void> {
+  if (!twilioSmsConfigured()) {
+    throw new Error("Twilio SMS is not configured");
+  }
+
   const client = getTwilioClient();
-  const from = getTwilioFromNumber();
+  let from = params.from;
+
+  if (!from && params.orgId) {
+    from = (await getTenantOutboundNumber(params.orgId)) ?? undefined;
+  }
+
+  if (!from) {
+    from = getTwilioFromNumber();
+  }
 
   await client.messages.create({
     to: params.to,
@@ -44,4 +59,11 @@ export function validateTwilioSignature(
   if (!authToken) return false;
 
   return twilio.validateRequest(authToken, signature, url, params);
+}
+
+export function requireTwilioWebhookAuth(): boolean {
+  if (process.env.NODE_ENV !== "production") {
+    return Boolean(process.env.TWILIO_AUTH_TOKEN);
+  }
+  return Boolean(process.env.TWILIO_AUTH_TOKEN);
 }

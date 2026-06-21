@@ -4,6 +4,37 @@ import { processDuePaymentFollowups } from "@/lib/leads/payment-followups";
 import { processInboundJob, processQueuedJobs } from "@/lib/jobs/process-inbound-job";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
+
+async function runJobBatch(body: { job_id?: string; batch?: boolean }) {
+  if (body.job_id) {
+    await processInboundJob(body.job_id);
+    return { processed: 1, job_id: body.job_id };
+  }
+
+  const inboundCount = await processQueuedJobs(10);
+  const followupCount = await processDuePaymentFollowups(20);
+
+  return {
+    processed: inboundCount + followupCount,
+    inbound_jobs: inboundCount,
+    payment_followups: followupCount,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  if (!verifyInternalSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const result = await runJobBatch({});
+    return NextResponse.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Job processing failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   if (!verifyInternalSecret(request)) {
@@ -18,19 +49,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if (body.job_id) {
-      await processInboundJob(body.job_id);
-      return NextResponse.json({ processed: 1, job_id: body.job_id });
-    }
-
-    const inboundCount = await processQueuedJobs(10);
-    const followupCount = await processDuePaymentFollowups(20);
-
-    return NextResponse.json({
-      processed: inboundCount + followupCount,
-      inbound_jobs: inboundCount,
-      payment_followups: followupCount,
-    });
+    const result = await runJobBatch(body);
+    return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Job processing failed";
     return NextResponse.json({ error: message }, { status: 500 });

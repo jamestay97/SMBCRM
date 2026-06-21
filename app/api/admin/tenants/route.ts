@@ -3,14 +3,21 @@ import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/platform";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { seedDefaultCalendar } from "@/lib/calendar/seed-defaults";
+import { normalizeStoredPhoneNumber } from "@/lib/jobs/enqueue";
+
+const DEFAULT_SERVICES_SCOPE =
+  "General service appointments. Update in Dashboard → Settings with exact services.";
+
 const createTenantSchema = z.object({
   business_name: z.string().min(1).max(200),
   ai_system_prompt: z.string().min(10).max(8000),
+  services_scope: z.string().min(10).max(4000).optional(),
   deposit_amount_cents: z.number().int().positive(),
   owner_email: z.string().email(),
   owner_password: z.string().min(8).max(128),
   plan_id: z.string().default("starter"),
-  llm_provider: z.enum(["ollama", "openai", "anthropic"]).default("ollama"),
+  llm_provider: z.enum(["ollama", "openai", "anthropic"]).default("openai"),
   llm_model: z.string().optional(),
   phone_number: z.string().optional(),
   twilio_sid: z.string().optional(),
@@ -95,9 +102,10 @@ export async function POST(request: NextRequest) {
     .insert({
       business_name: input.business_name,
       ai_system_prompt: input.ai_system_prompt,
+      services_scope: input.services_scope ?? DEFAULT_SERVICES_SCOPE,
       deposit_amount_cents: input.deposit_amount_cents,
       llm_provider: input.llm_provider,
-      llm_model: input.llm_model ?? null,
+      llm_model: input.llm_model ?? "gpt-4o",
       status: "active",
     })
     .select("id")
@@ -133,12 +141,14 @@ export async function POST(request: NextRequest) {
   if (input.phone_number) {
     await admin.from("tenant_phone_numbers").insert({
       org_id: org.id,
-      phone_number: input.phone_number,
+      phone_number: normalizeStoredPhoneNumber(input.phone_number),
       twilio_sid: input.twilio_sid ?? null,
       channel: "both",
       is_primary: true,
     });
   }
+
+  await seedDefaultCalendar(org.id);
 
   return NextResponse.json(
     { org_id: org.id, owner_user_id: userId },

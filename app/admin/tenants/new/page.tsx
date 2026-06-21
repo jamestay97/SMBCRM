@@ -35,8 +35,9 @@ export default function NewTenantPage() {
         owner_email: form.get("owner_email"),
         owner_password: form.get("owner_password"),
         plan_id: form.get("plan_id") || "starter",
-        llm_provider: form.get("llm_provider") || "ollama",
-        llm_model: form.get("llm_model") || undefined,
+        services_scope: form.get("services_scope") || undefined,
+        llm_provider: form.get("llm_provider") || "openai",
+        llm_model: form.get("llm_model") || "gpt-4o",
         phone_number: form.get("phone_number") || undefined,
         twilio_sid: form.get("twilio_sid") || undefined,
       }),
@@ -67,7 +68,8 @@ export default function NewTenantPage() {
         <CardHeader>
           <CardTitle>Business details</CardTitle>
           <CardDescription>
-            Twilio webhook: POST {process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/twilio/inbound
+            After deploy, set each Twilio number&apos;s SMS webhook to POST{" "}
+            {typeof window !== "undefined" ? window.location.origin : ""}/api/twilio/inbound
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -96,6 +98,16 @@ export default function NewTenantPage() {
                 <Input id="plan_id" name="plan_id" defaultValue="starter" />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="services_scope">Services scope</Label>
+              <textarea
+                id="services_scope"
+                name="services_scope"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                defaultValue="Sink repair, faucet repair, drain cleaning, toilet repair, general plumbing"
+                required
+              />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="llm_provider">LLM provider</Label>
@@ -103,16 +115,15 @@ export default function NewTenantPage() {
                   id="llm_provider"
                   name="llm_provider"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  defaultValue="ollama"
+                  defaultValue="openai"
                 >
-                  <option value="ollama">Ollama</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="anthropic">Anthropic</option>
+                  <option value="openai">OpenAI (GPT-4o)</option>
+                  <option value="ollama">Ollama (local)</option>
                 </select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="llm_model">LLM model</Label>
-                <Input id="llm_model" name="llm_model" placeholder="llama3.2" />
+                <Input id="llm_model" name="llm_model" defaultValue="gpt-4o" />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

@@ -7,8 +7,9 @@ Production-ready B2B SaaS infrastructure for AI-driven lead engagement, multi-te
 - **Frontend:** Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui
 - **Backend:** Supabase (Auth, Postgres, RLS)
 - **Payments:** Stripe Checkout Sessions + Payment Intents
-- **AI:** Ollama (local chat API + tool calls)
+- **AI:** OpenAI GPT-4o (default) or Ollama (local)
 - **Comms:** Twilio SMS + Vapi voice webhooks
+- **Hosting:** Vercel (required — this app cannot run on GitHub Pages)
 
 ## Setup
 
@@ -32,25 +33,19 @@ macOS/Linux:
 cp .env.example .env.local
 ```
 
-3. **Apply database schema**
+3. **Apply database migrations**
 
-Run `supabase/schema.sql` in the Supabase SQL Editor.
+Run all files in `supabase/migrations/` in order (002 through 012) in the Supabase SQL Editor, or run `supabase/schema.sql` for a fresh install then apply migrations.
 
-4. **Start Ollama and pull a tool-capable model**
-
-```bash
-ollama serve
-ollama pull llama3.1
-```
+4. **Configure OpenAI (production default)**
 
 Set in `.env.local`:
 
 ```env
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=llama3.1
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-4o
+OPENAI_API_KEY=sk-...
 ```
-
-Models with tool-calling support include `llama3.1`, `mistral-nemo`, and `qwen2.5`.
 
 5. **Stripe webhook**
 
@@ -75,13 +70,39 @@ curl -X POST http://localhost:3000/api/jobs/process \
   -d "{}"
 ```
 
-In production, schedule the same request on a cron (e.g. every 5 minutes).
+In production on Vercel, `vercel.json` runs this every 2 minutes via cron. Set `CRON_SECRET` (or use the same value as `INTERNAL_API_SECRET`).
 
 7. **Run locally**
 
 ```bash
 npm run dev
 ```
+
+## Deploy to production (Vercel)
+
+GitHub Pages **will not work** — this app needs a Node.js server for API routes, webhooks, and AI processing.
+
+1. Push the repo to GitHub.
+2. Import the project in [Vercel](https://vercel.com) and connect the repo.
+3. Add all env vars from `.env.example` in Vercel → Settings → Environment Variables.
+4. Set `NEXT_PUBLIC_APP_URL` and `WEBHOOK_BASE_URL` to your Vercel domain (e.g. `https://your-app.vercel.app`).
+5. Deploy. Run Supabase migrations if not already applied.
+6. Bootstrap platform admin: visit `/admin`, sign in, click bootstrap (email must be in `PLATFORM_ADMIN_EMAILS`).
+7. Create tenants at `/admin/tenants/new` — assign each business a Twilio number in E.164 format.
+8. In Twilio Console → each phone number → Messaging → set webhook to `POST https://your-app.vercel.app/api/twilio/inbound`.
+9. In Stripe Dashboard → webhooks → `POST https://your-app.vercel.app/api/stripe/webhook`.
+10. (Optional voice) In Vapi → set server URL to `POST https://your-app.vercel.app/api/vapi/{orgId}/webhook` per tenant.
+
+## Multi-tenant admin
+
+| Step | Where |
+|---|---|
+| Create business + owner account | `/admin/tenants/new` |
+| Assign Twilio phone number | Tenant detail → Twilio numbers |
+| Configure services + AI prompt | Owner logs into `/dashboard/settings` |
+| View leads & webchat | `/dashboard/leads` |
+
+SMS routing: inbound texts to a tenant number hit `/api/twilio/inbound`, which looks up the org by the **To** number, runs GPT-4o through the booking pipeline, and replies from that tenant's primary number.
 
 ## Architecture flow
 
@@ -98,8 +119,9 @@ npm run dev
 | `POST /api/ai/message` | Send webchat message to AI |
 | `POST /api/ai/tools/create-deposit-payment` | Internal tool endpoint (deposit link) |
 | `POST /api/stripe/webhook` | Payment success → lock lead |
-| `POST /api/twilio/[orgId]/inbound` | Inbound SMS |
+| `POST /api/twilio/inbound` | Inbound SMS (all tenants — routes by To number) |
 | `POST /api/vapi/[orgId]/webhook` | Voice transcripts |
+| `GET/POST /api/jobs/process` | Process inbound SMS queue + payment follow-ups |
 
 ## Multi-tenant safety
 

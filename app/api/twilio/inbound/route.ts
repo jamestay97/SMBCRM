@@ -1,12 +1,15 @@
 import { getWebhookBaseUrl } from "@/lib/app-url";
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   enqueueInboundJob,
   resolveOrgByPhoneNumber,
 } from "@/lib/jobs/enqueue";
 import { processInboundJob } from "@/lib/jobs/process-inbound-job";
-import { validateTwilioSignature } from "@/lib/twilio/client";
+import { getTenantInboundAccess } from "@/lib/tenant/access";
+import {
+  requireTwilioWebhookAuth,
+  validateTwilioSignature,
+} from "@/lib/twilio/client";
 import type { InboundJobPayload } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -23,6 +26,11 @@ function formDataToRecord(formData: FormData): Record<string, string> {
 }
 
 export async function POST(request: NextRequest) {
+  if (!requireTwilioWebhookAuth()) {
+    console.error("[twilio/inbound] TWILIO_AUTH_TOKEN is required in production");
+    return new NextResponse("Twilio webhook auth not configured", { status: 503 });
+  }
+
   const formData = await request.formData();
   const fields = formDataToRecord(formData);
 
@@ -52,14 +60,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const admin = createAdminClient();
-  const { data: org } = await admin
-    .from("organizations")
-    .select("id, status, sla_target_seconds")
-    .eq("id", tenant.orgId)
-    .single();
-
-  if (!org || org.status === "suspended") {
+  const access = await getTenantInboundAccess(tenant.orgId);
+  if (!access.allowed) {
     return twimlResponse("This business is currently unavailable.");
   }
 
@@ -76,12 +78,14 @@ export async function POST(request: NextRequest) {
       orgId: tenant.orgId,
       channel: "sms",
       payload,
-      slaTargetSeconds: org.sla_target_seconds ?? 300,
+      slaTargetSeconds: access.slaTargetSeconds,
     });
 
-    processInboundJob(jobId).catch((err) => {
-      console.error("[twilio/inbound] background job failed", jobId, err);
-    });
+    if (process.env.NODE_ENV !== "production") {
+      processInboundJob(jobId).catch((err) => {
+        console.error("[twilio/inbound] background job failed", jobId, err);
+      });
+    }
 
     return twimlResponse(ACK_MESSAGE);
   } catch (err) {

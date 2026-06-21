@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertNoDuplicateLead } from "@/lib/leads/duplicates";
+import { assertNoDuplicateLead, normalizePhone } from "@/lib/leads/duplicates";
 import { createConversationForLead } from "@/lib/ollama/conversations";
 import { runAssistant } from "@/lib/ollama/run-assistant";
 import { resolveOrgLlmConfig } from "@/lib/llm/org-config";
@@ -102,7 +102,7 @@ export async function ingestLead(
   if (params.sendOutboundSms && params.phone) {
     try {
       const smsBody = paymentUrl ? `${reply}\n\nPay your deposit: ${paymentUrl}` : reply;
-      await sendSms({ to: params.phone, body: smsBody });
+      await sendSms({ to: params.phone, body: smsBody, orgId: params.orgId });
     } catch (err) {
       console.error("[ingestLead] SMS delivery failed", err);
     }
@@ -180,7 +180,11 @@ export async function handleInboundMessage(params: {
       const smsBody = result.paymentUrl
         ? `${result.reply}\n\nPay your deposit: ${result.paymentUrl}`
         : result.reply;
-      await sendSms({ to: lead.phone, body: smsBody });
+      await sendSms({
+        to: lead.phone,
+        body: smsBody,
+        orgId: params.orgId,
+      });
     } catch (err) {
       console.error("[handleInboundMessage] SMS delivery failed", err);
     }
@@ -194,14 +198,21 @@ export async function findLeadByPhone(
   phone: string
 ): Promise<{ id: string; name: string } | null> {
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("leads")
-    .select("id, name")
-    .eq("org_id", orgId)
-    .eq("phone", phone)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const target = normalizePhone(phone);
 
-  return data;
+  const { data: leads } = await admin
+    .from("leads")
+    .select("id, name, phone")
+    .eq("org_id", orgId)
+    .not("phone", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  for (const lead of leads ?? []) {
+    if (lead.phone && normalizePhone(lead.phone) === target) {
+      return { id: lead.id, name: lead.name };
+    }
+  }
+
+  return null;
 }

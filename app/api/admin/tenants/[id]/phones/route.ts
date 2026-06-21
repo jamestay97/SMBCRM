@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/platform";
+import { normalizeStoredPhoneNumber } from "@/lib/jobs/enqueue";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const phoneSchema = z.object({
@@ -56,7 +57,7 @@ export async function POST(
     .from("tenant_phone_numbers")
     .insert({
       org_id: params.id,
-      phone_number: parsed.data.phone_number,
+      phone_number: normalizeStoredPhoneNumber(parsed.data.phone_number),
       twilio_sid: parsed.data.twilio_sid ?? null,
       channel: parsed.data.channel,
       is_primary: parsed.data.is_primary,
