@@ -21,6 +21,7 @@ import {
   servicesScopeToTags,
   tagsToServicesScope,
 } from "@/lib/leads/services-scope-tags";
+import { VOICE_RECEPTIONIST_PROMPT } from "@/lib/ai/voice-receptionist-prompt";
 
 export default function SettingsPage() {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [serviceTags, setServiceTags] = useState<string[]>([]);
   const [primaryPhone, setPrimaryPhone] = useState<string | null>(null);
+  const [systemPrompt, setSystemPrompt] = useState("");
 
   const canManage = role === "owner" || role === "admin";
 
@@ -43,6 +45,9 @@ export default function SettingsPage() {
         setOrg(data.organization ?? null);
         if (data.organization?.services_scope) {
           setServiceTags(servicesScopeToTags(data.organization.services_scope));
+        }
+        if (data.organization?.ai_system_prompt) {
+          setSystemPrompt(data.organization.ai_system_prompt);
         }
         if (data.primary_phone) setPrimaryPhone(data.primary_phone);
         if (data.role) setRole(data.role);
@@ -77,7 +82,7 @@ export default function SettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         business_name: formData.get("business_name"),
-        ai_system_prompt: formData.get("ai_system_prompt"),
+        ai_system_prompt: systemPrompt,
         services_scope: servicesScope,
         deposit_amount_cents: depositCents,
         stripe_account_id: String(formData.get("stripe_account_id") || "") || null,
@@ -89,6 +94,7 @@ export default function SettingsPage() {
       toast.error(data.error ?? "Save failed");
     } else {
       setOrg(data.organization);
+      setSystemPrompt(data.organization.ai_system_prompt);
       setServiceTags(servicesScopeToTags(data.organization.services_scope));
       toast.success("Settings saved");
     }
@@ -130,6 +136,7 @@ export default function SettingsPage() {
       <BusinessPhoneCard
         canManage={canManage}
         appOrigin={appOrigin}
+        orgId={org.id}
         onSaved={(phoneDisplay) => setPrimaryPhone(phoneDisplay)}
       />
 
@@ -159,15 +166,36 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ai_system_prompt">AI system prompt</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="ai_system_prompt">AI system prompt</Label>
+                {canManage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSystemPrompt(VOICE_RECEPTIONIST_PROMPT);
+                      toast.success("Voice receptionist template applied — save, then paste the same text in Vapi");
+                    }}
+                  >
+                    Use phone receptionist template
+                  </Button>
+                )}
+              </div>
               <textarea
                 id="ai_system_prompt"
                 name="ai_system_prompt"
-                className="flex min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                defaultValue={org.ai_system_prompt}
+                className="flex min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                value={systemPrompt}
+                onChange={(event) => setSystemPrompt(event.target.value)}
                 required
                 disabled={!canManage}
               />
+              <p className="text-xs text-muted-foreground">
+                Used after phone calls to book appointments from the transcript. Paste the
+                same prompt in Vapi → Assistant → System Prompt so the caller provides
+                everything needed on the call.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="services_scope">Services scope</Label>

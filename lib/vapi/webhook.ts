@@ -39,6 +39,17 @@ export function getVapiEventType(body: unknown): string | undefined {
   return undefined;
 }
 
+function getVapiStatusUpdateStatus(body: unknown): string | null {
+  const message = asRecord(asRecord(body)?.message);
+  return message && typeof message.status === "string" ? message.status : null;
+}
+
+function isCallCompletionEvent(body: unknown, eventType: string): boolean {
+  if (eventType === "end-of-call-report") return true;
+  if (eventType !== "status-update") return false;
+  return getVapiStatusUpdateStatus(body)?.toLowerCase() === "ended";
+}
+
 export {
   extractBusinessPhoneNumber,
   extractCustomerPhoneNumber,
@@ -112,6 +123,7 @@ export async function handleVapiWebhookBody(
   const eventType = getVapiEventType(body);
 
   if (!eventType || !CALL_SYNC_EVENTS.has(eventType)) {
+    console.info("[vapi/webhook] skipped event", { orgId, eventType: eventType ?? "unknown" });
     return NextResponse.json({ received: true, skipped: eventType ?? "unknown" });
   }
 
@@ -119,15 +131,40 @@ export async function handleVapiWebhookBody(
   const vapiCallId = extractVapiCallId(body);
 
   if (!customerNumber || !vapiCallId) {
-    return NextResponse.json({ received: true, skipped: "missing call metadata" });
+    console.warn("[vapi/webhook] missing call metadata", {
+      orgId,
+      eventType,
+      vapiCallId,
+      hasCustomerNumber: Boolean(customerNumber),
+    });
+    return NextResponse.json({
+      received: true,
+      skipped: "missing call metadata",
+      event_type: eventType,
+      has_call_id: Boolean(vapiCallId),
+      has_customer_phone: Boolean(customerNumber),
+    });
   }
 
   try {
-    if (eventType === "end-of-call-report") {
+    if (isCallCompletionEvent(body, eventType)) {
       const result = await syncVapiCallEvent({ orgId, body, eventType });
       if (!result) {
+        console.warn("[vapi/webhook] unparseable completion payload", {
+          orgId,
+          eventType,
+          vapiCallId,
+        });
         return NextResponse.json({ received: true, skipped: "unparseable call" });
       }
+
+      console.info("[vapi/webhook] call synced", {
+        orgId,
+        eventType,
+        leadId: result.leadId,
+        callId: result.call.id,
+        bookingProcessed: Boolean(result.booking),
+      });
 
       return NextResponse.json({
         received: true,
@@ -154,7 +191,17 @@ export async function handleVapiWebhookBody(
       status: call.status,
     });
   } catch (err) {
-    console.error("[vapi/webhook] error", err);
-    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[vapi/webhook] error", { orgId, eventType, vapiCallId, message, err });
+    return NextResponse.json(
+      {
+        error: "Processing failed",
+        detail:
+          message.includes("voice_calls") || message.includes("relation")
+            ? "Database migration 015_voice_calls.sql may not be applied."
+            : message,
+      },
+      { status: 500 }
+    );
   }
 }

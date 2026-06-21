@@ -234,7 +234,7 @@ export async function syncVapiCallEvent(params: {
   }
 
   let booking: { reply?: string; paymentUrl?: string } | null = null;
-  if (isNewTranscript) {
+  if (isNewTranscript || (params.parsed.status === "completed" && params.parsed.transcript)) {
     booking = await processVoiceCallBooking({
       orgId: params.orgId,
       leadId: call.lead_id,

@@ -22,10 +22,12 @@ type PhoneRecord = {
 export function BusinessPhoneCard({
   canManage,
   appOrigin,
+  orgId,
   onSaved,
 }: {
   canManage: boolean;
   appOrigin: string;
+  orgId?: string;
   onSaved?: (phoneDisplay: string) => void;
 }) {
   const [loading, setLoading] = useState(true);
@@ -115,13 +117,25 @@ export function BusinessPhoneCard({
           </form>
         )}
 
-        <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+        <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground space-y-2">
           <p className="font-medium text-foreground">Webhook URLs</p>
           <p>SMS (Twilio): POST {appOrigin}/api/twilio/inbound</p>
           <p>Voice (Twilio): POST {appOrigin}/api/twilio/voice</p>
           <p>
-            Voice (Vapi — routes by this phone number): POST{" "}
-            {appOrigin}/api/vapi/webhook
+            Voice (Vapi — routes by business phone): {appOrigin}/api/vapi/webhook
+          </p>
+          {orgId && (
+            <p>
+              Voice (Vapi — direct to your org, most reliable):{" "}
+              {appOrigin}/api/vapi/{orgId}/webhook
+            </p>
+          )}
+          <p className="pt-1 border-t border-border/60">
+            In Vapi → Assistant → Server Messages, enable{" "}
+            <code className="text-[11px]">end-of-call-report</code> and{" "}
+            <code className="text-[11px]">status-update</code>. If{" "}
+            <code className="text-[11px]">VAPI_WEBHOOK_SECRET</code> is set in Vercel,
+            add the same secret in Vapi.
           </p>
         </div>
       </CardContent>

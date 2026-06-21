@@ -14,10 +14,42 @@ function readNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function mapVapiStatus(raw: string | null, eventType: string): VoiceCallStatus {
-  if (eventType === "end-of-call-report") return "completed";
+function normalizePhoneCandidate(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    try {
+      return toE164(value);
+    } catch {
+      return null;
+    }
+  }
 
-  const normalized = raw?.toLowerCase() ?? "";
+  const record = asRecord(value);
+  if (!record) return null;
+
+  for (const key of ["number", "phoneNumber", "phone", "e164"]) {
+    const candidate = readString(record[key]);
+    if (!candidate) continue;
+    try {
+      return toE164(candidate);
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function mapVapiStatus(
+  raw: string | null,
+  eventType: string,
+  messageStatus: string | null
+): VoiceCallStatus {
+  if (eventType === "end-of-call-report") return "completed";
+  if (eventType === "status-update" && messageStatus?.toLowerCase() === "ended") {
+    return "completed";
+  }
+
+  const normalized = raw?.toLowerCase() ?? messageStatus?.toLowerCase() ?? "";
   if (
     normalized.includes("ended") ||
     normalized.includes("completed") ||
@@ -55,28 +87,28 @@ export function extractVapiCallId(body: unknown): string | null {
 
   const message = asRecord(root.message);
   const call = asRecord(message?.call) ?? asRecord(root.call);
-  return readString(call?.id) ?? readString(root.callId);
+  return readString(call?.id) ?? readString(root.callId) ?? readString(message?.callId);
 }
 
 export function extractBusinessPhoneNumber(body: unknown): string | null {
   const root = asRecord(body);
   if (!root) return null;
 
+  const message = asRecord(root.message);
+  const call = asRecord(message?.call) ?? asRecord(root.call);
+
   const candidates: unknown[] = [
+    message?.phoneNumber,
+    call?.phoneNumber,
     root.phoneNumber,
-    asRecord(root.message)?.phoneNumber,
-    asRecord(root.call)?.phoneNumber,
-    asRecord(asRecord(root.message)?.call)?.phoneNumber,
+    call?.to,
+    message?.to,
+    root.to,
   ];
 
   for (const candidate of candidates) {
-    const record = asRecord(candidate);
-    if (record && typeof record.number === "string") {
-      return toE164(record.number);
-    }
-    if (typeof candidate === "string" && candidate.trim()) {
-      return toE164(candidate);
-    }
+    const normalized = normalizePhoneCandidate(candidate);
+    if (normalized) return normalized;
   }
 
   return null;
@@ -93,12 +125,47 @@ export function extractCustomerPhoneNumber(body: unknown): string | null {
     asRecord(message?.customer) ??
     asRecord(root.customer);
 
-  const number =
-    readString(customer?.number) ??
-    readString(call?.from) ??
-    readString(root.from);
+  const candidates: unknown[] = [
+    customer,
+    customer?.number,
+    customer?.phoneNumber,
+    call?.customerNumber,
+    message?.customerNumber,
+    call?.from,
+    message?.from,
+    root.from,
+    call?.caller,
+    message?.caller,
+  ];
 
-  return number ? toE164(number) : null;
+  for (const candidate of candidates) {
+    const normalized = normalizePhoneCandidate(candidate);
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+function transcriptFromMessages(messages: unknown): string | undefined {
+  if (!Array.isArray(messages) || messages.length === 0) return undefined;
+
+  const lines = messages
+    .map((entry) => asRecord(entry))
+    .filter(Boolean)
+    .map((entry) => {
+      const roleRaw = readString(entry?.role)?.toLowerCase() ?? "user";
+      const role =
+        roleRaw === "assistant" || roleRaw === "bot" ? "Assistant" : "Customer";
+      const text =
+        readString(entry?.message) ??
+        readString(entry?.content) ??
+        readString(entry?.text) ??
+        readString(entry?.transcript);
+      return text ? `${role}: ${text}` : null;
+    })
+    .filter(Boolean);
+
+  return lines.length ? lines.join("\n") : undefined;
 }
 
 export function extractVapiTranscript(body: unknown): string | undefined {
@@ -106,36 +173,22 @@ export function extractVapiTranscript(body: unknown): string | undefined {
   if (!root) return undefined;
 
   const message = asRecord(root.message);
+  const call = asRecord(message?.call) ?? asRecord(root.call);
+  const artifact = asRecord(message?.artifact);
 
   const direct =
     readString(message?.transcript) ??
     readString(root.transcript) ??
-    readString(asRecord(message?.artifact)?.transcript);
+    readString(artifact?.transcript) ??
+    readString(call?.transcript);
 
   if (direct) return direct;
 
-  const artifact = asRecord(message?.artifact);
-  const messages = artifact?.messages;
-  if (Array.isArray(messages)) {
-    const lines = messages
-      .map((entry) => asRecord(entry))
-      .filter(Boolean)
-      .map((entry) => {
-        const role = entry?.role === "assistant" ? "Assistant" : "Customer";
-        const text =
-          readString(entry?.message) ??
-          readString(entry?.content) ??
-          readString(entry?.text);
-        return text ? `${role}: ${text}` : null;
-      })
-      .filter(Boolean);
-
-    if (lines.length) {
-      return lines.join("\n");
-    }
-  }
-
-  return undefined;
+  return (
+    transcriptFromMessages(artifact?.messages) ??
+    transcriptFromMessages(message?.messages) ??
+    transcriptFromMessages(call?.messages)
+  );
 }
 
 export function parseVapiCallPayload(
@@ -150,8 +203,9 @@ export function parseVapiCallPayload(
   const message = asRecord(root?.message);
   const call = asRecord(message?.call) ?? asRecord(root?.call);
   const artifact = asRecord(message?.artifact);
+  const messageStatus = readString(message?.status);
 
-  const status = mapVapiStatus(readString(call?.status), eventType);
+  const status = mapVapiStatus(readString(call?.status), eventType, messageStatus);
   const startedAt =
     readString(call?.startedAt) ??
     readString(message?.startedAt) ??
@@ -167,7 +221,11 @@ export function parseVapiCallPayload(
     businessPhone: extractBusinessPhoneNumber(body),
     status,
     startedAt,
-    endedAt: eventType === "end-of-call-report" ? endedAt ?? new Date().toISOString() : endedAt,
+    endedAt:
+      eventType === "end-of-call-report" ||
+      (eventType === "status-update" && messageStatus?.toLowerCase() === "ended")
+        ? endedAt ?? new Date().toISOString()
+        : endedAt,
     durationSeconds:
       readNumber(message?.durationSeconds) ??
       readNumber(call?.durationSeconds) ??
