@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export function verifyInternalSecret(request: NextRequest): boolean {
   const secret = process.env.INTERNAL_API_SECRET?.trim();
@@ -14,4 +14,8 @@ export function verifyInternalSecret(request: NextRequest): boolean {
   if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
 
   return false;
+}
+
+export function unauthorizedResponse() {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }

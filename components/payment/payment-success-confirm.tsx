@@ -105,6 +105,10 @@ export function PaymentSuccessConfirm({
     );
   }
 
+  if (state.status !== "confirmed") {
+    return null;
+  }
+
   const resolvedLeadId = state.leadId ?? leadId;
 
   return (

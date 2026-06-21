@@ -18,9 +18,9 @@ export function phoneLookupKeys(phone: string): string[] {
   const trimmed = phone.trim();
   const e164 = toE164(trimmed);
   const digits = normalizePhone(trimmed);
-  return [...new Set([trimmed, e164, `+1${digits}`, digits, `+${digits}`])].filter(
-    Boolean
-  );
+  return Array.from(
+    new Set([trimmed, e164, `+1${digits}`, digits, `+${digits}`])
+  ).filter(Boolean);
 }
 
 export async function getTenantOutboundNumber(
