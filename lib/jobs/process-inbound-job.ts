@@ -135,15 +135,17 @@ export async function processInboundJob(jobId: string): Promise<void> {
       })
       .eq("id", leadId);
 
-    if (typedJob.channel === "sms" && payload.from) {
-      const smsBody = paymentUrl
-        ? `${reply}\n\nPay your deposit: ${paymentUrl}`
-        : reply;
-      await sendSms({
-        to: payload.from,
-        body: smsBody,
-        orgId: typedJob.org_id,
-      });
+    if (typedJob.channel === "sms" || typedJob.channel === "voice") {
+      if (payload.from) {
+        const smsBody = paymentUrl
+          ? `${reply}\n\nPay your deposit: ${paymentUrl}`
+          : reply;
+        await sendSms({
+          to: payload.from,
+          body: smsBody,
+          orgId: typedJob.org_id,
+        });
+      }
     }
 
     const finalStatus = slaMet ? "completed" : "sla_breached";

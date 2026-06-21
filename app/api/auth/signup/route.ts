@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { seedDefaultCalendar } from "@/lib/calendar/seed-defaults";
+import { ensureOrganizationPublicSlug } from "@/lib/business/slug";
+import { formatPhoneForDisplay } from "@/lib/business/public-profile";
+import { toE164 } from "@/lib/twilio/phone";
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -102,6 +105,7 @@ export async function POST(request: NextRequest) {
   });
 
   await seedDefaultCalendar(org.id);
+  await ensureOrganizationPublicSlug(org.id, business_name);
 
   return NextResponse.json({ org_id: org.id }, { status: 201 });
 }

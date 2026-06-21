@@ -57,6 +57,7 @@ export type Organization = {
   sla_target_seconds: number;
   timezone: string;
   services_scope: string | null;
+  public_slug: string | null;
   created_at: string;
   updated_at: string;
 };

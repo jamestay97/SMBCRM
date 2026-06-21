@@ -4,6 +4,7 @@ import { requirePlatformAdmin } from "@/lib/auth/platform";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { seedDefaultCalendar } from "@/lib/calendar/seed-defaults";
+import { ensureOrganizationPublicSlug } from "@/lib/business/slug";
 import { normalizeStoredPhoneNumber } from "@/lib/jobs/enqueue";
 
 const DEFAULT_SERVICES_SCOPE =
@@ -149,9 +150,10 @@ export async function POST(request: NextRequest) {
   }
 
   await seedDefaultCalendar(org.id);
+  const publicSlug = await ensureOrganizationPublicSlug(org.id, input.business_name);
 
   return NextResponse.json(
-    { org_id: org.id, owner_user_id: userId },
+    { org_id: org.id, owner_user_id: userId, public_slug: publicSlug },
     { status: 201 }
   );
 }

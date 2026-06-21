@@ -3,6 +3,7 @@ import { updateSession } from "@/lib/supabase/middleware";
 import { isPlatformAdmin } from "@/lib/auth/platform";
 
 const publicPaths = ["/", "/login", "/signup", "/payment/success", "/payment/cancelled"];
+const publicPathPrefixes = ["/b/"];
 const publicApiPrefixes = [
   "/api/auth/signup",
   "/api/stripe/webhook",
@@ -10,10 +11,14 @@ const publicApiPrefixes = [
   "/api/vapi/",
   "/api/ai/tools/",
   "/api/jobs/process",
+  "/api/public/",
 ];
 
 function isPublicPath(pathname: string): boolean {
   if (publicPaths.includes(pathname)) return true;
+  if (publicPathPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return true;
+  }
   return publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
 }
 

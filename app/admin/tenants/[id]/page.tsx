@@ -236,6 +236,25 @@ export default function AdminTenantDetailPage({
             POST {appOrigin}/api/twilio/inbound
           </p>
           <p>
+            <span className="text-muted-foreground">Voice (AI receptionist): </span>
+            POST {appOrigin}/api/twilio/voice
+          </p>
+          <p>
+            <span className="text-muted-foreground">Customer page: </span>
+            {tenant.public_slug ? (
+              <a
+                href={`${appOrigin}/b/${tenant.public_slug}`}
+                className="text-primary underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {appOrigin}/b/{tenant.public_slug}
+              </a>
+            ) : (
+              "Save tenant to generate slug"
+            )}
+          </p>
+          <p>
             <span className="text-muted-foreground">Voice (Vapi): </span>
             POST {appOrigin}/api/vapi/{tenant.id}/webhook
           </p>

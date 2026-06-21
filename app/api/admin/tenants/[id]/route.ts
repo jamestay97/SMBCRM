@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/platform";
+import { ensureOrganizationPublicSlug } from "@/lib/business/slug";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const updateSchema = z.object({
@@ -51,6 +52,11 @@ export async function GET(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+
+  if (!data.public_slug) {
+    const slug = await ensureOrganizationPublicSlug(data.id, data.business_name);
+    data.public_slug = slug;
   }
 
   return NextResponse.json({ tenant: data });

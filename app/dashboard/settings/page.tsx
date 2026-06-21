@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import type { Organization, OrgMemberRole } from "@/types/database";
 import { BootstrapAdminCard } from "@/components/admin/bootstrap-admin-card";
+import { CustomerContactLinkCard } from "@/components/settings/customer-contact-link-card";
 import { ServicesScopeTagsInput } from "@/components/settings/services-scope-tags-input";
 import {
   servicesScopeToTags,
@@ -27,6 +28,7 @@ export default function SettingsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [serviceTags, setServiceTags] = useState<string[]>([]);
+  const [primaryPhone, setPrimaryPhone] = useState<string | null>(null);
 
   const canManage = role === "owner" || role === "admin";
 
@@ -41,6 +43,7 @@ export default function SettingsPage() {
         if (data.organization?.services_scope) {
           setServiceTags(servicesScopeToTags(data.organization.services_scope));
         }
+        if (data.primary_phone) setPrimaryPhone(data.primary_phone);
         if (data.role) setRole(data.role);
       })
       .catch((err) => {
@@ -117,6 +120,11 @@ export default function SettingsPage() {
           Only workspace owners and admins can edit these settings.
         </div>
       )}
+
+      <CustomerContactLinkCard
+        publicSlug={org.public_slug}
+        phoneDisplay={primaryPhone}
+      />
 
       <Card>
         <CardHeader>
