@@ -8,7 +8,8 @@ export default function BusinessNotFound() {
         <h1 className="text-2xl font-bold">Business not found</h1>
         <p className="mt-2 text-muted-foreground">
           This page may have moved or the business is not accepting requests
-          right now.
+          right now. Copy the customer link from Dashboard → Settings — do not
+          use placeholder URLs like <code>/b/your-business-slug</code>.
         </p>
         <Button className="mt-6" asChild>
           <Link href="/">Go home</Link>

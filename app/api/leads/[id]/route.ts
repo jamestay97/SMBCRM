@@ -25,6 +25,7 @@ const updateLeadSchema = z
     phone: z.string().min(7).max(30).nullable().optional(),
     email: z.string().email().nullable().optional(),
     appointment_reason: z.string().max(2000).nullable().optional(),
+    service_address: z.string().max(500).nullable().optional(),
     status: leadStatusSchema.optional(),
     scope_confirmed: z.boolean().optional(),
   })
@@ -155,6 +156,11 @@ export async function PATCH(
       ? patch.appointment_reason?.trim() || null
       : current.appointment_reason;
 
+  const serviceAddress =
+    patch.service_address !== undefined
+      ? patch.service_address?.trim() || null
+      : current.service_address;
+
   const name =
     patch.name?.trim() ||
     buildDisplayName(firstName, lastName, current.name);
@@ -167,7 +173,12 @@ export async function PATCH(
     email,
     appointment_reason: appointmentReason,
     intent: appointmentReason ?? current.intent,
+    service_address: serviceAddress,
   };
+
+  if (patch.service_address !== undefined) {
+    updates.intake_address_collected = Boolean(serviceAddress);
+  }
 
   if (patch.status !== undefined) {
     updates.status = patch.status as LeadStatus;

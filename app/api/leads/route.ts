@@ -13,6 +13,7 @@ const createLeadSchema = z
     name: z.string().min(1).max(200),
     phone: z.string().min(7).max(30).optional(),
     email: z.string().email().optional(),
+    service_address: z.string().max(500).optional(),
     initial_message: z.string().max(2000).optional(),
     send_sms: z.boolean().optional(),
   })
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       name: parsed.data.name,
       phone: parsed.data.phone,
       email: parsed.data.email,
+      serviceAddress: parsed.data.service_address,
       initialMessage: parsed.data.initial_message,
       channel: "webchat",
       sendOutboundSms: parsed.data.send_sms ?? false,

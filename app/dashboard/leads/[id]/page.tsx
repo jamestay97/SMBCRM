@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { LeadEditForm } from "@/components/leads/lead-edit-form";
+import { LeadAddressMap } from "@/components/leads/lead-address-map";
 import { LeadDetailActions } from "@/components/leads/lead-detail-actions";
 import { WebchatPanel } from "@/components/leads/webchat-panel";
 import { Badge } from "@/components/ui/badge";
@@ -100,6 +101,8 @@ export default async function LeadDetailPage({
         <div className="space-y-4 overflow-y-auto lg:max-h-full">
           <LeadEditForm lead={typedLead} />
 
+          <LeadAddressMap address={typedLead.service_address} />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Customer intake</CardTitle>
@@ -118,6 +121,10 @@ export default async function LeadDetailPage({
               <p>
                 <span className="font-medium">Email:</span>{" "}
                 {typedLead.email ?? "—"}
+              </p>
+              <p>
+                <span className="font-medium">Service address:</span>{" "}
+                {typedLead.service_address ?? "—"}
               </p>
               <p>
                 <span className="font-medium">Reason:</span>{" "}

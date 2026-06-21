@@ -11,6 +11,7 @@ type IngestLeadParams = {
   name: string;
   phone?: string;
   email?: string;
+  serviceAddress?: string;
   initialMessage?: string;
   channel?: TranscriptEntry["channel"];
   sendOutboundSms?: boolean;
@@ -62,6 +63,8 @@ export async function ingestLead(
       last_name: params.extracted?.last_name ?? null,
       phone: params.phone ?? null,
       email: params.email ?? null,
+      service_address: params.serviceAddress?.trim() || null,
+      intake_address_collected: Boolean(params.serviceAddress?.trim()),
       status: "new",
       source: params.source ?? params.channel ?? "manual",
       intent: params.extracted?.intent ?? null,

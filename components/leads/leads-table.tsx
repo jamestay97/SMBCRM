@@ -29,6 +29,7 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Contact</TableHead>
+            <TableHead>Address</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Messages</TableHead>
             <TableHead>Created</TableHead>
@@ -38,7 +39,7 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
         <TableBody>
           {leads.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={7} className="text-center text-muted-foreground">
                 No leads yet. Create one from the dashboard.
               </TableCell>
             </TableRow>
@@ -62,6 +63,9 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {lead.phone ?? lead.email ?? "—"}
+                  </TableCell>
+                  <TableCell className="max-w-[220px] truncate text-muted-foreground">
+                    {lead.service_address ?? "—"}
                   </TableCell>
                   <TableCell>
                     <LeadStatusBadge status={lead.status} />

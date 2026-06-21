@@ -14,6 +14,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Lead, LeadStatus } from "@/types/database";
+import { AddressAutocompleteInput } from "@/components/leads/address-autocomplete-input";
+import { googleMapsConfigured } from "@/lib/maps/google-maps";
 
 const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: "new", label: "New" },
@@ -32,6 +34,7 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
   const [appointmentReason, setAppointmentReason] = useState(
     lead.appointment_reason ?? lead.intent ?? ""
   );
+  const [serviceAddress, setServiceAddress] = useState(lead.service_address ?? "");
   const [status, setStatus] = useState<LeadStatus>(lead.status);
   const [scopeConfirmed, setScopeConfirmed] = useState(lead.scope_confirmed);
 
@@ -54,6 +57,7 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
         phone: phone.trim() || null,
         email: email.trim() || null,
         appointment_reason: appointmentReason.trim() || null,
+        service_address: serviceAddress.trim() || null,
         status,
         scope_confirmed: scopeConfirmed,
       }),
@@ -137,6 +141,20 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
               value={appointmentReason}
               onChange={(event) => setAppointmentReason(event.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="service_address">Service address</Label>
+            <AddressAutocompleteInput
+              id="service_address"
+              value={serviceAddress}
+              onChange={setServiceAddress}
+            />
+            <p className="text-xs text-muted-foreground">
+              {googleMapsConfigured()
+                ? "Start typing for Google address suggestions."
+                : "Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for address autocomplete."}
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

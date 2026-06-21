@@ -28,30 +28,59 @@ export function formatPhoneForDisplay(e164: string): string {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const ORG_PUBLIC_FIELDS =
+  "id, business_name, services_scope, deposit_amount_cents, status";
+
+async function resolveOrganizationId(
+  identifier: { slug?: string; orgId?: string }
+): Promise<string | null> {
+  const admin = createAdminClient();
+
+  if (identifier.orgId) {
+    return identifier.orgId;
+  }
+
+  if (!identifier.slug) {
+    return null;
+  }
+
+  if (UUID_RE.test(identifier.slug)) {
+    return identifier.slug;
+  }
+
+  const { data, error } = await admin
+    .from("organizations")
+    .select("id")
+    .eq("public_slug", identifier.slug)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[public-profile] public_slug lookup failed", error.message);
+    return null;
+  }
+
+  return data?.id ?? null;
+}
+
 async function loadOrganizationRecord(identifier: {
   slug?: string;
   orgId?: string;
 }) {
   const admin = createAdminClient();
-  let query = admin
-    .from("organizations")
-    .select(
-      "id, business_name, public_slug, services_scope, deposit_amount_cents, status"
-    );
+  const orgId = await resolveOrganizationId(identifier);
+  if (!orgId) return null;
 
-  if (identifier.orgId) {
-    query = query.eq("id", identifier.orgId);
-  } else if (identifier.slug) {
-    if (UUID_RE.test(identifier.slug)) {
-      query = query.eq("id", identifier.slug);
-    } else {
-      query = query.eq("public_slug", identifier.slug);
-    }
-  } else {
+  const { data: org, error } = await admin
+    .from("organizations")
+    .select(ORG_PUBLIC_FIELDS)
+    .eq("id", orgId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[public-profile] organization load failed", error.message);
     return null;
   }
 
-  const { data: org } = await query.maybeSingle();
   if (!org || org.status !== "active") return null;
 
   const access = await getTenantInboundAccess(org.id);
@@ -76,10 +105,16 @@ async function loadOrganizationRecord(identifier: {
     org.services_scope?.trim() ||
     "Home repair and maintenance services. Contact us to schedule.";
 
+  const { data: slugRow } = await admin
+    .from("organizations")
+    .select("public_slug")
+    .eq("id", org.id)
+    .maybeSingle();
+
   return {
     id: org.id,
     business_name: org.business_name,
-    public_slug: org.public_slug ?? org.id,
+    public_slug: slugRow?.public_slug ?? org.id,
     services_scope,
     services: parseServiceTerms(services_scope),
     phone_e164,

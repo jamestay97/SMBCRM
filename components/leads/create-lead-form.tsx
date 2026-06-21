@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AddressAutocompleteInput } from "@/components/leads/address-autocomplete-input";
 
 export function CreateLeadForm() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export function CreateLeadForm() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [serviceAddress, setServiceAddress] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent) {
@@ -42,6 +44,7 @@ export function CreateLeadForm() {
           name,
           phone: trimmedPhone || undefined,
           email: trimmedEmail || undefined,
+          service_address: serviceAddress.trim() || undefined,
           initial_message: initialMessage || undefined,
           send_sms: Boolean(trimmedPhone),
         }),
@@ -110,6 +113,14 @@ export function CreateLeadForm() {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="service_address">Service address (optional)</Label>
+            <AddressAutocompleteInput
+              id="service_address"
+              value={serviceAddress}
+              onChange={setServiceAddress}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="message">Initial message (optional)</Label>
