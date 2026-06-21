@@ -178,7 +178,7 @@ export async function handleInboundMessage(params: {
     apiKey: llmConfig.apiKey,
   });
 
-  if (params.deliverViaSms && params.channel === "sms" && lead.phone) {
+  if (params.deliverViaSms && lead.phone) {
     try {
       const smsBody = result.paymentUrl
         ? `${result.reply}\n\nPay your deposit: ${result.paymentUrl}`

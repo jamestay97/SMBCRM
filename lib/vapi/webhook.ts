@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  findLeadByPhone,
-  handleInboundMessage,
-  ingestLead,
-} from "@/lib/leads/ingest";
 import { resolveOrgByPhoneNumber } from "@/lib/jobs/enqueue";
 import { getTenantInboundAccess } from "@/lib/tenant/access";
-import { toE164 } from "@/lib/twilio/phone";
+import { syncVapiCallEvent, upsertVoiceCall } from "@/lib/vapi/call-sync";
+import {
+  extractBusinessPhoneNumber,
+  extractCustomerPhoneNumber,
+  extractVapiCallId,
+  parseVapiCallPayload,
+} from "@/lib/vapi/parse-call";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const PROCESSED_EVENT_TYPES = new Set([
-  "end-of-call-report",
-  "transcript",
-  "conversation-update",
-]);
+const CALL_SYNC_EVENTS = new Set(["end-of-call-report", "status-update"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -42,98 +39,10 @@ export function getVapiEventType(body: unknown): string | undefined {
   return undefined;
 }
 
-export function extractBusinessPhoneNumber(body: unknown): string | null {
-  const root = asRecord(body);
-  if (!root) return null;
-
-  const candidates: unknown[] = [
-    root.phoneNumber,
-    asRecord(root.message)?.phoneNumber,
-    asRecord(root.call)?.phoneNumber,
-    asRecord(asRecord(root.message)?.call)?.phoneNumber,
-  ];
-
-  for (const candidate of candidates) {
-    const record = asRecord(candidate);
-    if (record && typeof record.number === "string") {
-      return toE164(record.number);
-    }
-    if (typeof candidate === "string" && candidate.trim()) {
-      return toE164(candidate);
-    }
-  }
-
-  return null;
-}
-
-export function extractCustomerPhoneNumber(body: unknown): string | null {
-  const root = asRecord(body);
-  if (!root) return null;
-
-  const message = asRecord(root.message);
-  const call = asRecord(message?.call) ?? asRecord(root.call);
-  const customer =
-    asRecord(call?.customer) ??
-    asRecord(message?.customer) ??
-    asRecord(root.customer);
-
-  const number =
-    (typeof customer?.number === "string" && customer.number) ||
-    (typeof call?.from === "string" && call.from) ||
-    (typeof root.from === "string" && root.from) ||
-    null;
-
-  return number ? toE164(number) : null;
-}
-
-export function extractVapiTranscript(body: unknown): string | undefined {
-  const root = asRecord(body);
-  if (!root) return undefined;
-
-  const message = asRecord(root.message);
-
-  if (typeof message?.transcript === "string" && message.transcript.trim()) {
-    return message.transcript.trim();
-  }
-
-  if (typeof root.transcript === "string" && root.transcript.trim()) {
-    return root.transcript.trim();
-  }
-
-  const artifact = asRecord(message?.artifact);
-  if (typeof artifact?.transcript === "string" && artifact.transcript.trim()) {
-    return artifact.transcript.trim();
-  }
-
-  const messages = artifact?.messages;
-  if (Array.isArray(messages)) {
-    const userLines = messages
-      .map((entry) => asRecord(entry))
-      .filter((entry) => entry?.role === "user")
-      .map(
-        (entry) =>
-          (typeof entry?.message === "string" && entry.message) ||
-          (typeof entry?.content === "string" && entry.content) ||
-          ""
-      )
-      .filter(Boolean);
-
-    if (userLines.length) {
-      return userLines.join("\n");
-    }
-  }
-
-  const nestedMessage = asRecord(message?.message);
-  if (
-    nestedMessage?.role === "user" &&
-    typeof nestedMessage.content === "string" &&
-    nestedMessage.content.trim()
-  ) {
-    return nestedMessage.content.trim();
-  }
-
-  return undefined;
-}
+export {
+  extractBusinessPhoneNumber,
+  extractCustomerPhoneNumber,
+} from "@/lib/vapi/parse-call";
 
 async function assertOrgAvailable(orgId: string): Promise<NextResponse | null> {
   const admin = createAdminClient();
@@ -202,40 +111,48 @@ export async function handleVapiWebhookBody(
 ): Promise<NextResponse> {
   const eventType = getVapiEventType(body);
 
-  if (!eventType || !PROCESSED_EVENT_TYPES.has(eventType)) {
-    return NextResponse.json({ received: true });
+  if (!eventType || !CALL_SYNC_EVENTS.has(eventType)) {
+    return NextResponse.json({ received: true, skipped: eventType ?? "unknown" });
   }
 
   const customerNumber = extractCustomerPhoneNumber(body);
-  const transcript = extractVapiTranscript(body);
+  const vapiCallId = extractVapiCallId(body);
 
-  if (!customerNumber || !transcript) {
-    return NextResponse.json({ received: true });
+  if (!customerNumber || !vapiCallId) {
+    return NextResponse.json({ received: true, skipped: "missing call metadata" });
   }
 
   try {
-    const lead = await findLeadByPhone(orgId, customerNumber);
+    if (eventType === "end-of-call-report") {
+      const result = await syncVapiCallEvent({ orgId, body, eventType });
+      if (!result) {
+        return NextResponse.json({ received: true, skipped: "unparseable call" });
+      }
 
-    if (!lead) {
-      await ingestLead({
-        orgId,
-        name: customerNumber,
-        phone: customerNumber,
-        initialMessage: transcript,
-        channel: "voice",
-        sendOutboundSms: false,
+      return NextResponse.json({
+        received: true,
+        org_id: orgId,
+        lead_id: result.leadId,
+        call_id: result.call.id,
+        booking_processed: Boolean(result.booking),
+        payment_url: result.booking?.paymentUrl ?? null,
       });
-      return NextResponse.json({ received: true, org_id: orgId });
     }
 
-    await handleInboundMessage({
-      orgId,
-      leadId: lead.id,
-      message: transcript,
-      channel: "voice",
-    });
+    const parsed = parseVapiCallPayload(body, eventType);
+    if (!parsed) {
+      return NextResponse.json({ received: true, skipped: "unparseable status" });
+    }
 
-    return NextResponse.json({ received: true, org_id: orgId });
+    const { call } = await upsertVoiceCall({ orgId, parsed });
+
+    return NextResponse.json({
+      received: true,
+      org_id: orgId,
+      lead_id: call.lead_id,
+      call_id: call.id,
+      status: call.status,
+    });
   } catch (err) {
     console.error("[vapi/webhook] error", err);
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });

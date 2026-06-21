@@ -164,6 +164,33 @@ export type LeadPaymentFollowup = {
   created_at: string;
 };
 
+export type VoiceCallStatus =
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "no_answer"
+  | "busy";
+
+export type VoiceCall = {
+  id: string;
+  org_id: string;
+  lead_id: string | null;
+  vapi_call_id: string;
+  customer_phone: string;
+  business_phone: string | null;
+  status: VoiceCallStatus;
+  direction: "inbound" | "outbound";
+  started_at: string | null;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  transcript: string | null;
+  summary: string | null;
+  recording_url: string | null;
+  ended_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type TranscriptEntry = {
   role: "user" | "assistant" | "system";
   content: string;

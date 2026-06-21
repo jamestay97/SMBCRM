@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
+import { CallHistoryCard } from "@/components/leads/call-history-card";
 import { LeadEditForm } from "@/components/leads/lead-edit-form";
 import { LeadAddressMap } from "@/components/leads/lead-address-map";
 import { LeadDetailActions } from "@/components/leads/lead-detail-actions";
@@ -14,6 +15,7 @@ import type {
   Lead,
   Payment,
   TranscriptEntry,
+  VoiceCall,
 } from "@/types/database";
 
 export default async function LeadDetailPage({
@@ -55,9 +57,16 @@ export default async function LeadDetailPage({
     .eq("lead_id", params.id)
     .order("starts_at", { ascending: false });
 
+  const { data: voiceCalls } = await supabase
+    .from("voice_calls")
+    .select("*")
+    .eq("lead_id", params.id)
+    .order("created_at", { ascending: false });
+
   const typedConversation = conversation as AiConversation | null;
   const typedPayments = (payments ?? []) as Payment[];
   const typedAppointments = (appointments ?? []) as Appointment[];
+  const typedVoiceCalls = (voiceCalls ?? []) as VoiceCall[];
   const transcript = (typedConversation?.transcript_json ?? []) as TranscriptEntry[];
   const hasPaidPayment = typedPayments.some((p) => p.status === "succeeded");
   const hasConfirmedAppointment = typedAppointments.some(
@@ -102,6 +111,8 @@ export default async function LeadDetailPage({
           <LeadEditForm lead={typedLead} />
 
           <LeadAddressMap address={typedLead.service_address} />
+
+          <CallHistoryCard calls={typedVoiceCalls} />
 
           <Card>
             <CardHeader>
