@@ -1,4 +1,7 @@
-import { formatReasonForCustomer } from "@/lib/leads/appointment-reason";
+import {
+  extractPrimaryServiceSubject,
+  formatReasonForCustomer,
+} from "@/lib/leads/appointment-reason";
 import { llmJsonCompletion } from "@/lib/llm/chat";
 import { scopeWordsMatch } from "@/lib/leads/scope-word-match";
 import type { LlmProvider } from "@/types/database";
@@ -51,9 +54,30 @@ Return ONLY valid JSON:
 
 Rules:
 - in_scope is true only when the request clearly fits the business services list.
+- When the services list is broad or general (e.g. "general service appointments", "home repair"), treat typical residential repair/maintenance requests as in scope unless clearly unrelated.
 - Do not reject a request when its service type appears in the services list.
+- When out of scope, politely decline and list what the business does handle. Invite them to choose an in-scope service you can schedule.
 - summary is a short internal note for staff.
-- customer_message is what to tell the customer. If in_scope, confirm we can help. If out of scope, politely decline and mention what we do handle.`;
+- customer_message is what to tell the customer. If in_scope, confirm we can help and mention next steps (collect details, schedule). If out of scope, decline and suggest an in-scope alternative when possible.`;
+
+const BROAD_SCOPE_HINTS =
+  /\b(general|appointment|appointments|maintenance|handyman|home service|residential|commercial service|all types|variety|wide range|repair and maintenance)\b/i;
+
+const CLEAR_IN_SCOPE_HOME_SERVICES =
+  /\b(sinks?|faucets?|toilets?|drains?|pipes?|garbage disposals?|water heaters?|outlets?|wiring|leaks?|drywall|tiles?|grout|doors?|windows?|hvac|furnaces?|heaters?|mailboxes?|bathrooms?|kitchens?)\b/i;
+
+export function isBroadServicesScope(servicesScope: string): boolean {
+  const terms = parseServiceTerms(servicesScope);
+  if (terms.length === 0) return true;
+  if (terms.length <= 2) {
+    return terms.every(
+      (term) =>
+        BROAD_SCOPE_HINTS.test(term) ||
+        term.split(/\s+/).length <= 4
+    );
+  }
+  return false;
+}
 
 export function parseServiceTerms(servicesScope: string): string[] {
   return servicesScope
@@ -160,6 +184,16 @@ export function matchServiceScope(
   }
 
   if (terms.length > 0 && reasonWords.length > 0) {
+    if (isBroadServicesScope(servicesScope)) {
+      if (CLEAR_IN_SCOPE_HOME_SERVICES.test(reason)) {
+        const label =
+          extractPrimaryServiceSubject(reason) ??
+          reasonWords.find((word) => CLEAR_IN_SCOPE_HOME_SERVICES.test(word)) ??
+          reason;
+        return { match: "in", matchedTerms: [label] };
+      }
+      return { match: "ambiguous", matchedTerms: [] };
+    }
     return { match: "out", matchedTerms: [] };
   }
 
@@ -189,7 +223,8 @@ export function buildOutOfScopeGuidanceReply(params: {
   const offer = buildServicesOfferMessage(params.servicesScope);
   const reason = params.appointmentReason?.trim();
   if (reason) {
-    return `I'm sorry, ${reason} isn't something we handle. ${offer}`;
+    const label = formatReasonForCustomer(reason, params.servicesScope);
+    return `I'm sorry, ${label} isn't something we handle. ${offer}`;
   }
   return offer;
 }
@@ -212,7 +247,7 @@ function deterministicScopeResult(params: {
   return {
     in_scope: false,
     summary: `No overlap with services scope: ${servicesSummary}.`,
-    customer_message: `I'm sorry, ${formatReasonForCustomer(params.appointmentReason, params.servicesScope)} isn't something we handle. We specialize in ${servicesSummary}.`,
+    customer_message: `I'm sorry, ${formatReasonForCustomer(params.appointmentReason, params.servicesScope)} isn't something we handle. We specialize in ${servicesSummary}. If any of those work for you, tell me which one and I'll get you scheduled.`,
   };
 }
 

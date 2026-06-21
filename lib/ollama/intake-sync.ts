@@ -1,7 +1,10 @@
 import type { LeadIntakeRecord } from "@/lib/leads/intake";
 import {
+  extractPrimaryServiceSubject,
+  extractServiceFromMessage,
   isPlausibleAppointmentReason,
   looksLikeContactInfoMessage,
+  looksLikeNewServiceRequest,
   normalizeAppointmentReason,
 } from "@/lib/leads/appointment-reason";import {
   inferNameFromMessage,
@@ -20,23 +23,7 @@ const ADDRESS_EXPLICIT_RE =
 const ADDRESS_AT_NUMBER_RE =
   /\b(?:at\s+)?(\d{1,6}\s+[A-Za-z0-9.'\-\s]{3,80}(?:\b(?:st|street|ste|suite|apt|unit|ave|avenue|rd|road|blvd|boulevard|drive|dr|ln|lane|way|ct|court|pl|place|fl|florida)\b)[A-Za-z0-9.'\-\s]{0,40})/i;
 function extractServiceFromInquiry(message: string): string | undefined {
-  const trimmed = message.trim();
-  const patterns = [
-    /\bdo you do\s+(.+?)\??\s*$/i,
-    /\bcan you (?:help with|fix|repair|handle|do)\s+(.+?)\??\s*$/i,
-    /\bdo you (?:fix|repair|handle|work on|sell|offer)\s+(.+?)\??\s*$/i,
-    /\b(?:quote on|quote for|estimate for|price for|cost for|how much (?:for|to))\s+(.+?)\??\s*$/i,
-    /\b(?:fix|repair|fixing| repairing)\s+(?:my\s+)?(.+?)\??\s*$/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = trimmed.match(pattern);
-    if (match?.[1]?.trim()) {
-      return match[1].trim().replace(/[.!?]+$/, "");
-    }
-  }
-
-  return undefined;
+  return extractServiceFromMessage(message);
 }
 
 function looksLikeServicePivot(message: string): boolean {
@@ -51,6 +38,9 @@ function inferAppointmentReason(
 ): string | undefined {
   const trimmed = userMessage.trim();
   if (!trimmed || trimmed.length < 4) return undefined;
+
+  const primary = extractPrimaryServiceSubject(trimmed);
+  if (primary) return primary;
 
   const fromInquiry = extractServiceFromInquiry(trimmed);
   if (fromInquiry) return fromInquiry.slice(0, 200);
@@ -106,6 +96,16 @@ function resolveAppointmentReasonUpdate(params: {
 
   if (looksLikeContactInfoMessage(inferred)) {
     return undefined;
+  }
+
+  // Customer changed what they need — always re-evaluate scope on the new request.
+  if (!params.lead.scope_confirmed && inferred !== current) {
+    if (
+      looksLikeNewServiceRequest(params.userMessage) ||
+      looksLikeServicePivot(params.userMessage)
+    ) {
+      return inferred;
+    }
   }
 
   const currentScope = matchServiceScope(current, params.servicesScope);

@@ -23,11 +23,16 @@ function resolveModel(
   provider: LlmProvider,
   org: Pick<Organization, "llm_model">
 ): string {
-  if (org.llm_model) return org.llm_model;
-
   if (provider === "openai") {
-    return process.env.OPENAI_MODEL ?? process.env.LLM_MODEL ?? "gpt-4o";
+    return (
+      process.env.OPENAI_MODEL ??
+      process.env.LLM_MODEL ??
+      org.llm_model ??
+      "gpt-4o"
+    );
   }
+
+  if (org.llm_model) return org.llm_model;
 
   return process.env.OLLAMA_MODEL ?? "llama3.2";
 }

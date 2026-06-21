@@ -49,9 +49,12 @@ export function buildScopeHintForMessage(
   if (match.match === "out") {
     return (
       "The customer's latest message does not match any service you offer. " +
-      "Politely decline, list what you do handle, and invite them to choose an in-scope service. " +
+      "Politely decline that specific request, list what you do handle, and invite them to choose an in-scope service. " +
+      "If they describe a new request, verify scope again before continuing. " +
       "Do not offer appointment times until scope is confirmed."
     );
   }
-  return null;
+  return (
+    "Scope for this request is unclear — call verify_service_scope with their current request before booking."
+  );
 }

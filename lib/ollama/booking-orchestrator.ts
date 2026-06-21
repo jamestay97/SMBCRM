@@ -21,12 +21,12 @@ import {
 } from "@/lib/ollama/intake-sync";
 import {
   isPlausibleAppointmentReason,
+  looksLikeNewServiceRequest,
   normalizeAppointmentReason,
 } from "@/lib/leads/appointment-reason";
 import {
   buildOutOfScopeGuidanceReply,
   buildServicesOfferMessage,
-  matchServiceScope,
 } from "@/lib/leads/verify-scope";
 import {
   buildContactConfirmationPrompt,
@@ -571,48 +571,48 @@ export async function resolveBookingTurn(params: {
       });
     }
 
-    const messageScope = matchServiceScope(userMessage, params.servicesScope);
-    const inferredReason = inferAppointmentReasonFromMessage(
-      userMessage,
-      params.servicesScope
-    );
-    const canReverify =
-      messageScope.match === "in" ||
-      (inferredReason &&
-        matchServiceScope(inferredReason, params.servicesScope).match === "in");
+    if (looksLikeNewServiceRequest(userMessage)) {
+      const inferredReason = inferAppointmentReasonFromMessage(
+        userMessage,
+        params.servicesScope
+      );
+      const reasonToVerify =
+        normalizeAppointmentReason({
+          candidate: inferredReason ?? userMessage,
+          servicesScope: params.servicesScope,
+          fallback: lead.appointment_reason,
+        }) ?? lead.appointment_reason?.trim();
 
-    if (canReverify) {
-      try {
-        const reasonToVerify =
-          normalizeAppointmentReason({
-            candidate:
-              inferredReason ??
-              messageScope.matchedTerms.join(", ") ??
-              userMessage.trim(),
-            servicesScope: params.servicesScope,
-            fallback: lead.appointment_reason,
-          }) ?? lead.appointment_reason?.trim();
-        if (!reasonToVerify || !isPlausibleAppointmentReason(reasonToVerify)) {
-          throw new Error("Could not determine service for scope verification");
-        }
-        const scope = await runServiceScopeVerification({
-          orgId: params.orgId,
-          leadId: params.leadId,
-          appointmentReason: reasonToVerify,
-        });
-        lead = scope.lead;
+      if (reasonToVerify && isPlausibleAppointmentReason(reasonToVerify)) {
+        try {
+          const scope = await runServiceScopeVerification({
+            orgId: params.orgId,
+            leadId: params.leadId,
+            appointmentReason: reasonToVerify,
+          });
+          lead = scope.lead;
 
-        if (scope.in_scope) {
-          const nextStep = buildNextIntakeQuestion(scope.lead);
+          if (scope.in_scope) {
+            const nextStep = buildNextIntakeQuestion(scope.lead);
+            return bookingReply({
+              userMessage,
+              assistantReply: params.assistantReply,
+              reply: composeSalesReply(scope.lead, scope.customer_message),
+              pipelineAppend: nextStep ?? undefined,
+            });
+          }
+
           return bookingReply({
             userMessage,
             assistantReply: params.assistantReply,
-            reply: composeSalesReply(scope.lead, scope.customer_message),
-            pipelineAppend: nextStep ?? undefined,
+            reply: buildOutOfScopeGuidanceReply({
+              servicesScope: params.servicesScope,
+              appointmentReason: scope.verified_reason,
+            }),
           });
+        } catch (err) {
+          console.error("[booking-orchestrator] scope re-verification failed", err);
         }
-      } catch (err) {
-        console.error("[booking-orchestrator] scope re-verification failed", err);
       }
     }
 
