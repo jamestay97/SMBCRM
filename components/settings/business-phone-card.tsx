@@ -126,16 +126,40 @@ export function BusinessPhoneCard({
           </p>
           {orgId && (
             <p>
-              Voice (Vapi — direct to your org, most reliable):{" "}
+              Voice (Vapi — direct to your org, recommended):{" "}
               {appOrigin}/api/vapi/{orgId}/webhook
             </p>
           )}
+          {orgId && (
+            <div className="rounded border border-border/60 bg-background p-3 space-y-2">
+              <p className="font-medium text-foreground">Vapi setup checklist</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>
+                  Server URL:{" "}
+                  <code className="text-[11px] break-all">
+                    {appOrigin}/api/vapi/{orgId}/webhook
+                  </code>
+                </li>
+                <li>
+                  Server messages: <code className="text-[11px]">end-of-call-report</code>,{" "}
+                  <code className="text-[11px]">status-update</code>
+                </li>
+                <li>Save your Vapi number above as the business phone.</li>
+                <li>Run Supabase migration 015_voice_calls.sql if not applied.</li>
+              </ol>
+              <p className="text-[11px]">
+                Vapi sends POST requests after each call. Opening the webhook URL in a browser may
+                show 405 until the latest app version is deployed — that is normal.
+              </p>
+            </div>
+          )}
           <p className="pt-1 border-t border-border/60">
-            In Vapi → Assistant → Server Messages, enable{" "}
+            In Vapi → Assistant → Server URL, paste the org webhook above (POST only — no{" "}
+            <code className="text-[11px]">GET</code> in the browser). Enable Server Messages:{" "}
             <code className="text-[11px]">end-of-call-report</code> and{" "}
             <code className="text-[11px]">status-update</code>. If{" "}
-            <code className="text-[11px]">VAPI_WEBHOOK_SECRET</code> is set in Vercel,
-            add the same secret in Vapi.
+            <code className="text-[11px]">VAPI_WEBHOOK_SECRET</code> is in Vercel, match it in Vapi
+            (X-Vapi-Secret header, no Bearer prefix).
           </p>
         </div>
       </CardContent>

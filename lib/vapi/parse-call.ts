@@ -136,6 +136,10 @@ export function extractCustomerPhoneNumber(body: unknown): string | null {
     root.from,
     call?.caller,
     message?.caller,
+    asRecord(call?.transport)?.from,
+    asRecord(call?.transport)?.caller,
+    asRecord(call?.transport)?.customerNumber,
+    asRecord(call?.phoneCallProviderDetails)?.from,
   ];
 
   for (const candidate of candidates) {

@@ -20,7 +20,31 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function verifyVapiWebhook(request: NextRequest): boolean {
   const secret = process.env.VAPI_WEBHOOK_SECRET?.trim();
   if (!secret) return true;
-  return request.headers.get("x-vapi-secret") === secret;
+
+  const headerCandidates = [
+    request.headers.get("x-vapi-secret"),
+    request.headers.get("X-Vapi-Secret"),
+    request.headers.get("x-vapi-signature"),
+    request.headers.get("X-Vapi-Signature"),
+  ];
+
+  if (headerCandidates.some((value) => value === secret)) {
+    return true;
+  }
+
+  const authorization = request.headers.get("authorization")?.trim();
+  if (authorization === `Bearer ${secret}` || authorization === secret) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getVapiWebhookAuthFailureReason(): string {
+  return (
+    "Webhook secret mismatch. Set the same value in Vapi credentials (X-Vapi-Secret, no Bearer prefix) " +
+    "and Vercel VAPI_WEBHOOK_SECRET, or remove VAPI_WEBHOOK_SECRET from Vercel while testing."
+  );
 }
 
 export function getVapiEventType(body: unknown): string | undefined {
@@ -77,12 +101,14 @@ async function assertOrgAvailable(orgId: string): Promise<NextResponse | null> {
 
 export async function resolveOrgIdForVapiWebhook(params: {
   orgIdFromPath?: string;
+  orgIdFromQuery?: string | null;
   body: unknown;
 }): Promise<{ orgId: string } | { error: NextResponse }> {
-  if (params.orgIdFromPath) {
-    const blocked = await assertOrgAvailable(params.orgIdFromPath);
+  const orgIdOverride = params.orgIdFromPath ?? params.orgIdFromQuery?.trim();
+  if (orgIdOverride) {
+    const blocked = await assertOrgAvailable(orgIdOverride);
     if (blocked) return { error: blocked };
-    return { orgId: params.orgIdFromPath };
+    return { orgId: orgIdOverride };
   }
 
   const businessPhone = extractBusinessPhoneNumber(params.body);
@@ -124,7 +150,12 @@ export async function handleVapiWebhookBody(
 
   if (!eventType || !CALL_SYNC_EVENTS.has(eventType)) {
     console.info("[vapi/webhook] skipped event", { orgId, eventType: eventType ?? "unknown" });
-    return NextResponse.json({ received: true, skipped: eventType ?? "unknown" });
+    return NextResponse.json({
+      received: true,
+      skipped: eventType ?? "unknown",
+      hint:
+        "Enable serverMessages end-of-call-report and status-update on your Vapi assistant.",
+    });
   }
 
   const customerNumber = extractCustomerPhoneNumber(body);
