@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "replay:voice": "node scripts/replay-voice-webhook.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.6",

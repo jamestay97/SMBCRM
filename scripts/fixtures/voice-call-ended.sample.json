@@ -1,0 +1,71 @@
+{
+  "message": {
+    "type": "status-update",
+    "status": "ended",
+    "endedReason": "customer-ended-call",
+    "durationSeconds": 172,
+    "summary": "James Taylor called to schedule a sink repair for tomorrow at 9 AM at 1737 Turner Street, Clearwater, FL 33756. Email: jamestay97@gmail.com. Customer confirmed all details.",
+    "artifact": {
+      "messages": [
+        {
+          "role": "bot",
+          "message": "Hey, thank you for calling. What can I help you with today?"
+        },
+        {
+          "role": "user",
+          "message": "I need someone to fix my sink tomorrow at nine AM."
+        },
+        {
+          "role": "bot",
+          "message": "I can help with that. What's your first and last name?"
+        },
+        {
+          "role": "user",
+          "message": "James Taylor."
+        },
+        {
+          "role": "bot",
+          "message": "What's the best email address to reach you at?"
+        },
+        {
+          "role": "user",
+          "message": "James, p a y nine seven at gmail dot com."
+        },
+        {
+          "role": "bot",
+          "message": "So it's James Pay nine seven at Gmail dot com. Is that right?"
+        },
+        {
+          "role": "user",
+          "message": "Yes."
+        },
+        {
+          "role": "bot",
+          "message": "What's the full street address where we'll do the sink repair?"
+        },
+        {
+          "role": "user",
+          "message": "1737 Turner Street, Clearwater, Florida 33756."
+        },
+        {
+          "role": "bot",
+          "message": "Got it. Sink repair tomorrow at nine AM for James Taylor at 1737 Turner Street, Clearwater, Florida 33756. Email James Pay nine seven at Gmail dot com. Is all of that correct?"
+        },
+        {
+          "role": "user",
+          "message": "Yes."
+        },
+        {
+          "role": "bot",
+          "message": "Your appointment will be processed right after this call. You'll receive a confirmation text with a deposit link. Thanks for calling."
+        }
+      ]
+    },
+    "call": {
+      "id": "REPLACE_CALL_ID",
+      "customer": { "number": "+18622004214" }
+    },
+    "customer": { "number": "+18622004214" },
+    "phoneNumber": { "number": "+13217858961" }
+  }
+}
