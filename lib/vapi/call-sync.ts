@@ -1,13 +1,12 @@
-import { findLeadByPhone, handleInboundMessage } from "@/lib/leads/ingest";
-import {
-  appendTranscript,
-  createConversationForLead,
-  getConversationByLeadId,
-} from "@/lib/ollama/conversations";
+import { findLeadByPhone } from "@/lib/leads/ingest";
+import { createConversationForLead } from "@/lib/ollama/conversations";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { VoiceCall } from "@/types/database";
 import {
-  formatCallDuration,
+  appendVoiceTranscriptTurns,
+  finalizeVoiceCallBooking,
+} from "@/lib/vapi/voice-booking";
+import {
   parseVapiCallPayload,
   voiceCallToRow,
   type ParsedVapiCall,
@@ -61,33 +60,6 @@ async function ensureLeadForVoiceCall(params: {
   return { id: lead.id, isNew: true };
 }
 
-async function appendCallTranscript(params: {
-  leadId: string;
-  parsed: ParsedVapiCall;
-}): Promise<void> {
-  const conversation = await getConversationByLeadId(params.leadId);
-  if (!conversation) return;
-
-  const durationLabel = formatCallDuration(params.parsed.durationSeconds);
-  const header = `Inbound phone call (${durationLabel})${
-    params.parsed.summary ? `: ${params.parsed.summary}` : ""
-  }`;
-
-  await appendTranscript(conversation.id, {
-    role: "system",
-    content: header,
-    channel: "voice",
-  });
-
-  if (params.parsed.transcript?.trim()) {
-    await appendTranscript(conversation.id, {
-      role: "user",
-      content: params.parsed.transcript.trim(),
-      channel: "voice",
-    });
-  }
-}
-
 async function processVoiceCallBooking(params: {
   orgId: string;
   leadId: string;
@@ -96,35 +68,18 @@ async function processVoiceCallBooking(params: {
   const transcript = params.parsed.transcript?.trim();
   if (!transcript) return null;
 
-  const conversation = await getConversationByLeadId(params.leadId);
-  if (!conversation) return null;
-
-  const durationLabel = formatCallDuration(params.parsed.durationSeconds);
-  const header = `Inbound phone call (${durationLabel})${
-    params.parsed.summary ? `: ${params.parsed.summary}` : ""
-  }`;
-
-  await appendTranscript(conversation.id, {
-    role: "system",
-    content: header,
-    channel: "voice",
-  });
-
   try {
-    return await handleInboundMessage({
+    await appendVoiceTranscriptTurns({
+      leadId: params.leadId,
+      parsed: params.parsed,
+    });
+    return await finalizeVoiceCallBooking({
       orgId: params.orgId,
       leadId: params.leadId,
-      message: transcript,
-      channel: "voice",
-      deliverViaSms: true,
+      parsed: params.parsed,
     });
   } catch (err) {
     console.error("[vapi/call-sync] post-call booking failed", err);
-    await appendTranscript(conversation.id, {
-      role: "user",
-      content: transcript,
-      channel: "voice",
-    });
     return null;
   }
 }
@@ -133,7 +88,6 @@ export async function upsertVoiceCall(params: {
   orgId: string;
   parsed: ParsedVapiCall;
   leadId?: string | null;
-  skipTranscriptAppend?: boolean;
 }): Promise<{ call: VoiceCall; isNewTranscript: boolean }> {
   const admin = createAdminClient();
   let leadId = params.leadId ?? null;
@@ -183,10 +137,6 @@ export async function upsertVoiceCall(params: {
         row.transcript
     );
 
-    if (isNewTranscript && !params.skipTranscriptAppend) {
-      await appendCallTranscript({ leadId, parsed: params.parsed });
-    }
-
     return { call: data as VoiceCall, isNewTranscript };
   }
 
@@ -203,10 +153,6 @@ export async function upsertVoiceCall(params: {
   const isNewTranscript = Boolean(
     params.parsed.status === "completed" && row.transcript
   );
-
-  if (isNewTranscript && !params.skipTranscriptAppend) {
-    await appendCallTranscript({ leadId, parsed: params.parsed });
-  }
 
   return { call: data as VoiceCall, isNewTranscript };
 }
@@ -226,7 +172,6 @@ export async function syncVapiCallEvent(params: {
   const { call, isNewTranscript } = await upsertVoiceCall({
     orgId: params.orgId,
     parsed,
-    skipTranscriptAppend: true,
   });
 
   if (!call.lead_id) {
@@ -234,7 +179,7 @@ export async function syncVapiCallEvent(params: {
   }
 
   let booking: { reply?: string; paymentUrl?: string } | null = null;
-  if (isNewTranscript || (parsed.status === "completed" && parsed.transcript)) {
+  if (isNewTranscript) {
     booking = await processVoiceCallBooking({
       orgId: params.orgId,
       leadId: call.lead_id,
