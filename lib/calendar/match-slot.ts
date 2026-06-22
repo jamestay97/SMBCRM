@@ -11,11 +11,44 @@ const WEEKDAY_HINTS: Record<string, string> = {
   sunday: "sun",
 };
 
+const SPOKEN_HOUR_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
+/** Convert voice phrases like "nine AM" / "at nine" into "9 AM" for slot matching. */
+export function normalizeSpokenClockText(text: string): string {
+  let result = text;
+  for (const [word, hour] of Object.entries(SPOKEN_HOUR_WORDS)) {
+    result = result.replace(
+      new RegExp(`\\b${word}\\s+(a\\.?m\\.?|p\\.?m\\.?)\\b`, "gi"),
+      `${hour} $1`
+    );
+    result = result.replace(
+      new RegExp(`\\bat\\s+${word}\\b`, "gi"),
+      `at ${hour}`
+    );
+  }
+  return result;
+}
+
 export function parseClockTime(
   text: string,
   context: string
 ): { hour24: number; minute: number } | null {
-  const combined = `${text} ${context}`;
+  const normalizedText = normalizeSpokenClockText(text);
+  const normalizedContext = normalizeSpokenClockText(context);
+  const combined = `${normalizedText} ${normalizedContext}`;
 
   const explicit = combined.match(
     /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i
@@ -29,7 +62,7 @@ export function parseClockTime(
     return { hour24: hour, minute };
   }
 
-  const loose = text.match(/\b(\d{1,2})(?::(\d{2}))?\b/);
+  const loose = normalizedText.match(/\b(\d{1,2})(?::(\d{2}))?\b/);
   if (!loose) return null;
 
   let hour = parseInt(loose[1], 10);
@@ -147,9 +180,13 @@ export function findMatchingAvailableSlot(params: {
 }): AvailableSlot | null {
   if (params.slots.length === 0) return null;
 
-  const context = `${params.userMessage} ${params.assistantContext}`.trim();
+  const context = normalizeSpokenClockText(
+    `${params.userMessage} ${params.assistantContext}`.trim()
+  );
   const scheduleText =
-    params.userMessage.trim() || params.assistantContext.trim() || context;
+    normalizeSpokenClockText(
+      params.userMessage.trim() || params.assistantContext.trim() || context
+    );
 
   if (params.requestedStartsAt) {
     const exact = params.slots.find(

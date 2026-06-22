@@ -99,7 +99,7 @@ export function inferNameFromMessage(
   }
 
   const introPatterns = [
-    /\b(?:i'?m|i am|my name is|this is|call me|it'?s)\s+([A-Za-z][A-Za-z'`-]+)\s+([A-Za-z][A-Za-z'`-]+)/i,
+    /\b(?:i'?m|i am|my name is|this is|call me)\s+([A-Za-z][A-Za-z'`-]+)\s+([A-Za-z][A-Za-z'`-]+)/i,
     /\b(?:yeah|yes|yep|ok|okay)[,.]?\s+my name is\s+([A-Za-z][A-Za-z'`-]+)\s+([A-Za-z][A-Za-z'`-]+)/i,
   ];
 

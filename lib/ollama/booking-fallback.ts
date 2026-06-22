@@ -177,7 +177,7 @@ function replyClaimsFakeBooking(reply: string): boolean {
   );
 }
 
-function formatAlternativesReply(params: {
+export function formatAlternativesReply(params: {
   slots: AvailableSlot[];
   dayHints: string[];
   timeZone: string;
