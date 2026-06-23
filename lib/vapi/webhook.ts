@@ -144,7 +144,8 @@ export async function resolveOrgIdForVapiWebhook(params: {
 
 export async function handleVapiWebhookBody(
   orgId: string,
-  body: unknown
+  body: unknown,
+  options?: { forceReprocessBooking?: boolean }
 ): Promise<NextResponse> {
   const eventType = getVapiEventType(body);
 
@@ -179,7 +180,12 @@ export async function handleVapiWebhookBody(
 
   try {
     if (isCallCompletionEvent(body, eventType)) {
-      const result = await syncVapiCallEvent({ orgId, body, eventType });
+      const result = await syncVapiCallEvent({
+        orgId,
+        body,
+        eventType,
+        forceReprocessBooking: options?.forceReprocessBooking,
+      });
       if (!result) {
         console.warn("[vapi/webhook] unparseable completion payload", {
           orgId,
@@ -195,6 +201,7 @@ export async function handleVapiWebhookBody(
         leadId: result.leadId,
         callId: result.call.id,
         bookingProcessed: Boolean(result.booking),
+        bookingSkippedReason: result.bookingSkippedReason,
       });
 
       return NextResponse.json({
@@ -204,6 +211,8 @@ export async function handleVapiWebhookBody(
         call_id: result.call.id,
         booking_processed: Boolean(result.booking),
         payment_url: result.booking?.paymentUrl ?? null,
+        booking_reply: result.booking?.reply ?? null,
+        booking_skipped: result.bookingSkippedReason ?? null,
       });
     }
 

@@ -136,7 +136,10 @@ async function main() {
 
   const response = await fetch(webhookUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-SMBCRM-Replay": "true",
+    },
     body: JSON.stringify(payload),
   });
 
@@ -150,6 +153,18 @@ async function main() {
 
   console.log(`\nHTTP ${response.status}`);
   console.log(typeof body === "string" ? body : JSON.stringify(body, null, 2));
+
+  if (typeof body === "object" && body?.booking_processed === false) {
+    if (body.booking_skipped) {
+      console.log(`\nBooking skipped: ${body.booking_skipped}`);
+    } else if (body.booking_reply) {
+      console.log(`\nBooking ran but no payment URL. Reply: ${body.booking_reply}`);
+    } else {
+      console.log(
+        "\nBooking did not run. Check dev server logs for [vapi/voice-booking]."
+      );
+    }
+  }
 
   if (!response.ok) {
     process.exit(1);

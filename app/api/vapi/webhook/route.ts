@@ -43,5 +43,10 @@ export async function POST(request: NextRequest) {
     return resolved.error;
   }
 
-  return handleVapiWebhookBody(resolved.orgId, body);
+  const forceReprocessBooking =
+    request.headers.get("x-smbcrm-replay")?.toLowerCase() === "true";
+
+  return handleVapiWebhookBody(resolved.orgId, body, {
+    forceReprocessBooking,
+  });
 }

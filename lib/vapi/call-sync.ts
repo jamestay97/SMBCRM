@@ -64,15 +64,18 @@ async function processVoiceCallBooking(params: {
   orgId: string;
   leadId: string;
   parsed: ParsedVapiCall;
+  skipTranscriptAppend?: boolean;
 }): Promise<{ reply?: string; paymentUrl?: string } | null> {
   const transcript = params.parsed.transcript?.trim();
   if (!transcript) return null;
 
   try {
-    await appendVoiceTranscriptTurns({
-      leadId: params.leadId,
-      parsed: params.parsed,
-    });
+    if (!params.skipTranscriptAppend) {
+      await appendVoiceTranscriptTurns({
+        leadId: params.leadId,
+        parsed: params.parsed,
+      });
+    }
     return await finalizeVoiceCallBooking({
       orgId: params.orgId,
       leadId: params.leadId,
@@ -161,10 +164,12 @@ export async function syncVapiCallEvent(params: {
   orgId: string;
   body: unknown;
   eventType: string;
+  forceReprocessBooking?: boolean;
 }): Promise<{
   call: VoiceCall;
   leadId: string;
   booking?: { reply?: string; paymentUrl?: string } | null;
+  bookingSkippedReason?: string;
 } | null> {
   const parsed = parseVapiCallPayload(params.body, params.eventType);
   if (!parsed) return null;
@@ -179,13 +184,26 @@ export async function syncVapiCallEvent(params: {
   }
 
   let booking: { reply?: string; paymentUrl?: string } | null = null;
-  if (isNewTranscript) {
+  let bookingSkippedReason: string | undefined;
+
+  const shouldProcessBooking =
+    isNewTranscript ||
+    (params.forceReprocessBooking &&
+      parsed.status === "completed" &&
+      Boolean(parsed.transcript?.trim()));
+
+  if (shouldProcessBooking) {
     booking = await processVoiceCallBooking({
       orgId: params.orgId,
       leadId: call.lead_id,
       parsed,
+      skipTranscriptAppend:
+        !isNewTranscript && Boolean(params.forceReprocessBooking),
     });
+  } else if (parsed.status === "completed" && parsed.transcript?.trim()) {
+    bookingSkippedReason =
+      "Transcript already recorded for this call id. Use a new --call-id or run npm run replay:voice (sends replay header to re-run booking).";
   }
 
-  return { call, leadId: call.lead_id, booking };
+  return { call, leadId: call.lead_id, booking, bookingSkippedReason };
 }
